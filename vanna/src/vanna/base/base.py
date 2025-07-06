@@ -185,6 +185,11 @@ class VannaBase(ABC):
         question_sql_list = self.get_similar_question_sql(question, **kwargs)
         ddl_list = self.get_related_ddl(question, **kwargs)
         doc_list = self.get_related_documentation(question, **kwargs)
+
+        self.log(message=f"Retrieved question-sql pairs from VDB:\n\n{'\n\n'.join(question_sql_list)}", title="Retrieved Question-SQL Pair")
+        self.log(message=f"Retrieved DDL from VDB:\n\n{'\n\n'.join(ddl_list)}", title="Retrieved DDL")
+        self.log(message=f"Retrieved documents from VDB:\n\n{'\n\n'.join(doc_list)}", title="Retrieved Documents")
+
         prompt = self.get_sql_prompt(
             initial_prompt=initial_prompt,
             question=question,
@@ -2008,8 +2013,9 @@ class VannaBase(ABC):
                     df_columns_filtered_to_table = df.query(
                         f'{database_column} == "{database}" and {schema_column} == "{schema}" and {table_column} == "{table}"'
                     )
-                    doc = f"The following columns are in the {table} table in the {database} database:\n\n"
-                    doc += df_columns_filtered_to_table[columns].to_markdown()
+                    doc = f"The following columns are in the {schema}.{table} table in the {database} database:\n"
+                    doc += f"{self.extract_column_types(df_columns_filtered_to_table[columns])}\n"
+                    doc += f"Provided description for the table: {self.llm_describe_table(doc=doc, rows=self.get_table_top_rows(table_name=f"{schema}.{table}"))}"
 
                     plan._plan.append(
                         TrainingPlanItem(
@@ -2208,3 +2214,75 @@ class VannaBase(ABC):
             fig.update_layout(template="plotly_dark")
 
         return fig
+    
+    def extract_column_types(self, df : pd.DataFrame):
+        """
+        Extracts COLUMN_NAME and DATA_TYPE pairs from a pandas DataFrame
+        and returns them as a formatted string.
+        
+        Example output:
+        - CountryRegionCode -> nvarchar
+        - CurrencyCode -> nchar
+        - ModifiedDate -> datetime
+        """
+        required_cols = ["COLUMN_NAME", "DATA_TYPE"]
+        
+        # Normalize column names (to handle different casing or spacing)
+        col_map = {col.lower(): col for col in df.columns}
+        if not all(col.lower() in col_map for col in required_cols):
+            raise ValueError("DataFrame must contain 'COLUMN_NAME' and 'DATA_TYPE' columns.")
+
+        column_col = col_map["column_name"]
+        datatype_col = col_map["data_type"]
+
+        lines = [
+            f"- {row[column_col]} ({row[datatype_col]})"
+            for _, row in df[[column_col, datatype_col]].iterrows()
+        ]
+        return "\n".join(lines)
+
+    def get_table_top_rows(self, table_name : str, n=5):
+        try:
+            query = f"SELECT * FROM {table_name}"
+            return self.run_sql(query).head(n)
+        except Exception as e:
+            self.log(message=f"Error fetching top rows from {table_name}: {e}", title="Exception in Fetch Table Rows")
+            return None
+
+
+    def llm_describe_table(self, doc: str, rows: pd.DataFrame) -> str:
+        # Convert the sample rows to markdown for better formatting
+        if rows is not None:
+            sample_data_str = rows.to_markdown(index=False)
+        else:
+            sample_data_str = "Rows of the table is not provided for this table"
+
+        # Construct the prompt for the LLM
+        system_message = (
+            "You are a data analyst. Respond straightforwardly in a single, concise paragraph."
+        )
+
+        user_message = (
+            "Below is the schema of a database table, showing column names and their data types:\n\n"
+            f"{doc}\n\n"
+            "Here are the first few rows of data from this table:\n\n"
+            f"{sample_data_str}\n\n"
+            "Write a brief (less than one paragraph), clear description of what this table likely represents, "
+            "the kind of information it contains, and what each column might mean. Use professional and informative language."
+        )
+
+        prompt = [
+                self.system_message(system_message),
+                self.user_message(user_message)
+            ]
+        
+        self.log(message=prompt, title="Prompt", echo=False)
+
+        # Submit the prompt to the LLM and return its response
+        try:
+            return self.submit_prompt(prompt)
+        except Exception as e:
+            self.log(message=f"Error prompting LLM: {e}", title="Exception in Prompt")
+            return ""
+        
+

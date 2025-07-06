@@ -3,7 +3,6 @@ import os
 from openai import OpenAI
 from vanna.src.vanna.openai.openai_chat import OpenAI_Chat
 from vanna.src.vanna.base.base import VannaBase
-from vanna.src.vanna.base.agent_base import AVannaBase
 from vanna.src.vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
 
 from no_commit_utils.credentials_utils import read_avalai_api_key
@@ -37,9 +36,10 @@ def main() -> None:
     vn = MyVanna(openai_config=avalai_cfg, llm_config=llm_cfg)
     print("\n✅  Vanna configured successfully (AvalAI backend)\n")
 
-    connection_test = vn.test_llm_connection()
-    if connection_test == True:
-        print("\n✅  Vanna is connected to an LLM\n")
+    if input("Test connection to LLM provider? [y/N] ").lower().startswith("y"):
+        connection_test = vn.test_llm_connection()
+        if connection_test == True:
+            print("\n✅  Vanna is connected to an LLM\n")
     
 
     # ---------- DB connection (Windows Auth) ----------
