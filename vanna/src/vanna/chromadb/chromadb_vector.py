@@ -1,5 +1,7 @@
+import os
 import json
 from typing import List
+from pathlib import Path
 
 import chromadb
 import pandas as pd
@@ -10,7 +12,7 @@ from ..base import VannaBase
 from ..utils import deterministic_uuid
 
 default_ef = embedding_functions.DefaultEmbeddingFunction()
-
+os.environ["CHROMA_CACHE_DIR"] = str(Path("cache") / "chroma_cache")
 
 class ChromaDB_VectorStore(VannaBase):
     def __init__(self, config=None):
@@ -18,7 +20,7 @@ class ChromaDB_VectorStore(VannaBase):
         if config is None:
             config = {}
 
-        path = config.get("path", ".")
+        path = config.get("path", "./vdb/chroma")
         self.embedding_function = config.get("embedding_function", default_ef)
         curr_client = config.get("client", "persistent")
         collection_metadata = config.get("collection_metadata", None)

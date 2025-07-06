@@ -8,6 +8,8 @@ from ..base import VannaBase
 class OpenAI_Chat(VannaBase):
     def __init__(self, client=None, config=None):
         VannaBase.__init__(self, config=config)
+        if config is None:
+            config = {}
 
         # default parameters - can be overrided using config
         self.temperature = 0.7
@@ -83,8 +85,16 @@ class OpenAI_Chat(VannaBase):
                 stop=None,
                 temperature=self.temperature,
             )
+        # elif hasattr(self, 'model'):
+        #     self.log(message=f"Using model {self.model} for {num_tokens} tokens (approx)", title="Model usage")
+        #     response = self.client.chat.completions.create(
+        #         model=self.model,
+        #         messages=prompt,
+        #         stop=None,
+        #         temperature=self.temperature,
+        #     )
         elif self.config is not None and "engine" in self.config:
-            self.log(message=f"Using model {self.config['engine']} for {num_tokens} tokens (approx)", title="Engine usage")
+            self.log(message=f"Using model {self.config['engine']} for {num_tokens} tokens (approx)", title="Engine usage", echo=False)
 
             response = self.client.chat.completions.create(
                 engine=self.config["engine"],
@@ -93,7 +103,7 @@ class OpenAI_Chat(VannaBase):
                 temperature=self.temperature,
             )
         elif self.config is not None and "model" in self.config:
-            self.log(message=f"Using model {model} for {num_tokens} tokens (approx)", title="Model usage")
+            self.log(message=f"Using model {self.config["model"]} for {num_tokens} tokens (approx)", title="Model usage", echo=False)
             response = self.client.chat.completions.create(
                 model=self.config["model"],
                 messages=prompt,
@@ -106,7 +116,7 @@ class OpenAI_Chat(VannaBase):
             else:
                 model = "gpt-3.5-turbo"
 
-            self.log(message=f"Using model {model} for {num_tokens} tokens (approx)", title="Model usage")
+            self.log(message=f"Using model {model} for {num_tokens} tokens (approx)", title="Model usage", echo=False)
 
             response = self.client.chat.completions.create(
                 model=model,
@@ -115,7 +125,7 @@ class OpenAI_Chat(VannaBase):
                 temperature=self.temperature,
             )
 
-        self.log(message=response, title="Whole LLM Response")
+        self.log(message=response, title="Whole LLM Response", echo=False)
 
         # Find the first response from the chatbot that has text in it (some responses may not have text)
         for choice in response.choices:

@@ -1,6 +1,9 @@
 # Custom folders to ignore
 /no_commit_utils/
 /log/
+/credentials/
+/cache/
+/vdb/
 
 # Database files
 /*.sqlite3

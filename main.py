@@ -6,9 +6,14 @@ from vanna.src.vanna.base.base import VannaBase
 from vanna.src.vanna.base.agent_base import AVannaBase
 from vanna.src.vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
 
+from no_commit_utils.credentials_utils import read_avalai_api_key
+
+
+os.environ["CHROMA_CACHE_DIR"] = "./cache/chroma_cache"
+
 
 # ---- Compose with ChromaDB for the full Vanna client ---------------------
-class MyVanna(ChromaDB_VectorStore, OpenAI_Chat, AVannaBase):
+class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
     def __init__(self, openai_config : dict, llm_config: dict = {}, vdb_config: dict = {}):
         client = OpenAI(
             api_key=openai_config["api_key"],
@@ -21,7 +26,7 @@ class MyVanna(ChromaDB_VectorStore, OpenAI_Chat, AVannaBase):
 # ---- 3. Demo / entry-point ---------------------------------------------------
 def main() -> None:
     avalai_cfg = {
-        "api_key":  "",
+        "api_key":  read_avalai_api_key(),
         "base_url": "https://api.avalapis.ir/v1",
     }
 
@@ -31,6 +36,11 @@ def main() -> None:
 
     vn = MyVanna(openai_config=avalai_cfg, llm_config=llm_cfg)
     print("\n✅  Vanna configured successfully (AvalAI backend)\n")
+
+    connection_test = vn.test_llm_connection()
+    if connection_test == True:
+        print("\n✅  Vanna is connected to an LLM\n")
+    
 
     # ---------- DB connection (Windows Auth) ----------
     conn_str = (
@@ -42,22 +52,18 @@ def main() -> None:
     vn.connect_to_mssql(odbc_conn_str=conn_str)
     print("✅  Connected to database\n")
 
-    vn.ask_react_agent()
-    
-    while True:
-        pass
-
     # ---------- Training (only done once) ------------
-    df_schema = vn.run_sql("SELECT * FROM INFORMATION_SCHEMA.COLUMNS")
-    plan = vn.get_training_plan_generic(df_schema)
-    print(f"Training plan:\n{plan}\n")
+    if input("Plan for training? [y/N] ").lower().startswith("y"):
+        df_schema = vn.run_sql("SELECT * FROM INFORMATION_SCHEMA.COLUMNS")
+        plan = vn.get_training_plan_generic(df_schema)
+        print(f"Training plan:\n{plan}\n")
 
-    if input("Train on this plan? [y/N] ").lower().startswith("y"):
-        vn.train(plan=plan)
-        print("✅  Training complete\n")
+        if input("Train on this plan? [y/N] ").lower().startswith("y"):
+            vn.train(plan=plan)
+            print("✅  Training complete\n")
 
     if input("Open web app or continue in command-line? [w/C] ").lower().startswith("w"):
-        from vanna.flask import VannaFlaskApp
+        from vanna.src.vanna.flask.__init__ import VannaFlaskApp
         app = VannaFlaskApp(vn)
         app.run()
 

@@ -220,11 +220,11 @@ class TrainingPlanItem:
 
     def __str__(self):
         if self.item_type == self.ITEM_TYPE_SQL:
-            return f"Train on SQL: {self.item_group} {self.item_name}"
+            return f"SQL: {self.item_group} {self.item_name}"
         elif self.item_type == self.ITEM_TYPE_DDL:
-            return f"Train on DDL: {self.item_group} {self.item_name}"
+            return f"DDL: {self.item_group} {self.item_name}"
         elif self.item_type == self.ITEM_TYPE_IS:
-            return f"Train on Information Schema: {self.item_group} {self.item_name}"
+            return f"Information Schema: {self.item_group} {self.item_name}"
 
     ITEM_TYPE_SQL = "sql"
     ITEM_TYPE_DDL = "ddl"
@@ -233,7 +233,7 @@ class TrainingPlanItem:
 
 class TrainingPlan:
     """
-    A class representing a training plan. You can see what's in it, and remove items from it that you don't want trained.
+    A class representing a training plan. You can see what's in it, and remove items you don't want trained.
 
     **Example:**
     ```python

@@ -84,10 +84,27 @@ class VannaBase(ABC):
         self.current_thread_name = None
         self.current_log_id = None
 
-    def create_new_thread(self):
+    def test_llm_connection(self):
+        self.create_new_thread(thread_type="test")
+
+        try:
+            test_response = self.submit_prompt([
+                    self.system_message("Respond to user's message in one word"),
+                    self.user_message("Hi!"),
+                ])
+            print(f"LLM responded to test connection with: {test_response}")
+            if test_response.startswith('H'):
+                return True
+            else:
+                return False
+        except Exception as e:
+            print(f"Exception occurred in connection to LLM: {e}")
+            return False
+        
+    def create_new_thread(self, thread_type='chat'):
         now = datetime.now()
         current_time = now.strftime("%Y-%m-%d-%H-%M-%S")
-        self.current_thread_name = f"chat-{current_time}"
+        self.current_thread_name = f"{thread_type}-{current_time}"
         self.current_log_id = 0
 
     def log_df(self, df: pd.DataFrame, path):
@@ -1766,7 +1783,7 @@ class VannaBase(ABC):
             sql = self.generate_sql(question=question, allow_llm_to_see_data=allow_llm_to_see_data)
             self.log(echo=False, message=sql, title="Generated SQL")
         except Exception as e:
-            self.log(message=e, title="Exception in generating SQL")
+            self.log(message=f"The following exception occurred: {e}", title="Exception in generating SQL")
             return None, None, None
 
         if print_results:
@@ -1872,21 +1889,25 @@ class VannaBase(ABC):
             plan (TrainingPlan): The training plan to train on.
         """
 
+        self.create_new_thread(thread_type="train")
+
         if question and not sql:
+            self.log(message="Exiting training because a question is provided without the sql", title="Exit", echo=False)
             raise ValidationError("Please also provide a SQL query")
 
         if documentation:
-            print("Adding documentation....")
+            self.log(f"Training on document {documentation}", title="Train on Document")
             return self.add_documentation(documentation)
 
         if sql:
             if question is None:
                 question = self.generate_question(sql)
-                print("Question generated with sql:", question, "\nAdding SQL...")
+                self.log(message=f"Generating question for the SQL:\n{sql}", title="Generate Question")
+            self.log(message=f"Training on question-SQL pair:\n\n{question}\n\n{sql}", title="Train on Question")
             return self.add_question_sql(question=question, sql=sql)
 
         if ddl:
-            print("Adding ddl:", ddl)
+            self.log(message=f"Training on DDL:\n{ddl}", title="Train on DDL")
             return self.add_ddl(ddl)
 
         if plan:
@@ -1897,6 +1918,8 @@ class VannaBase(ABC):
                     self.add_documentation(item.item_value)
                 elif item.item_type == TrainingPlanItem.ITEM_TYPE_SQL:
                     self.add_question_sql(question=item.item_name, sql=item.item_value)
+
+            self.log(message=f"Training on a plan:\n\n{"\n\n".join(item.item_value for item in plan._plan)}", title="Train on Plan", echo=False)
 
     def _get_databases(self) -> List[str]:
         try:
@@ -1930,23 +1953,32 @@ class VannaBase(ABC):
         Returns:
             TrainingPlan: The training plan.
         """
+
+        self.create_new_thread(thread_type="plan")
+        self.log(message="Planning started with the given dataframe", save_df=True, df=df, echo=False)
+
         # For each of the following, we look at the df columns to see if there's a match:
         database_column = df.columns[
-            df.columns.str.lower().str.contains("database")
-            | df.columns.str.lower().str.contains("table_catalog")
+            df.columns.str.lower().str.contains("database") |
+            df.columns.str.lower().str.contains("table_catalog")
         ].to_list()[0]
+
         schema_column = df.columns[
             df.columns.str.lower().str.contains("table_schema")
         ].to_list()[0]
+
         table_column = df.columns[
             df.columns.str.lower().str.contains("table_name")
         ].to_list()[0]
+
         columns = [database_column,
                     schema_column,
                     table_column]
+        
         candidates = ["column_name",
                       "data_type",
                       "comment"]
+        
         matches = df.columns.str.lower().str.contains("|".join(candidates), regex=True)
         columns += df.columns[matches].to_list()
 
@@ -1979,6 +2011,8 @@ class VannaBase(ABC):
                             item_value=doc,
                         )
                     )
+
+        self.log(message=f"The following tables found:\n{'\n'.join(plan.get_summary())}", title="Plan Table", echo=False)
 
         return plan
 
