@@ -84,6 +84,7 @@ class VannaBase(ABC):
         self.current_thread_name = None
         self.current_log_id = None
 
+    # ---------- Test Methods
     def test_llm_connection(self):
         self.create_new_thread(thread_type="test")
 
@@ -100,7 +101,8 @@ class VannaBase(ABC):
         except Exception as e:
             print(f"Exception occurred in connection to LLM: {e}")
             return False
-        
+
+    # ---------- Log Methods
     def create_new_thread(self, thread_type='chat'):
         now = datetime.now()
         current_time = now.strftime("%Y-%m-%d-%H-%M-%S")
@@ -148,6 +150,7 @@ class VannaBase(ABC):
 
         return f"Respond in the {self.language} language."
 
+    # ---------- SQL Helper Methods
     def generate_sql(self, question: str, allow_llm_to_see_data=False, **kwargs) -> str:
         """
         Example:
@@ -309,6 +312,7 @@ class VannaBase(ABC):
 
         return False
 
+    # ---------- Generation Methods
     def should_generate_chart(self, df: pd.DataFrame) -> bool:
         """
         Example:
@@ -438,12 +442,12 @@ class VannaBase(ABC):
 
         return summary
 
-    # ----------------- Use Any Embeddings API ----------------- #
+    # ---------- Embedding Methods
     @abstractmethod
     def generate_embedding(self, data: str, **kwargs) -> List[float]:
         pass
 
-    # ----------------- Use Any Database to Store and Retrieve Context ----------------- #
+    # ---------- Vector Database Abstract Methods
     @abstractmethod
     def get_similar_question_sql(self, question: str, **kwargs) -> list:
         """
@@ -556,8 +560,7 @@ class VannaBase(ABC):
         """
         pass
 
-    # ----------------- Use Any Language Model API ----------------- #
-
+    # ---------- LLM Abstract Methods
     @abstractmethod
     def system_message(self, message: str) -> any:
         pass
@@ -570,6 +573,7 @@ class VannaBase(ABC):
     def assistant_message(self, message: str) -> any:
         pass
 
+    # ---------- LLM Methods
     def str_to_approx_token_count(self, string: str) -> int:
         return len(string) / 4
 
@@ -814,8 +818,7 @@ class VannaBase(ABC):
 
         return self._sanitize_plotly_code(self._extract_python_code(plotly_code))
 
-    # ----------------- Connect to Any Database to run the Generated SQL ----------------- #
-
+    # ---------- Database Methods
     def connect_to_snowflake(
         self,
         account: str,
@@ -1738,6 +1741,7 @@ class VannaBase(ABC):
             "You need to connect to a database first by running vn.connect_to_snowflake(), vn.connect_to_postgres(), similar function, or manually set vn.run_sql"
         )
 
+    # ---------- Main API Methods
     def ask(
         self,
         question: Union[str, None] = None,
@@ -1860,6 +1864,9 @@ class VannaBase(ABC):
                 return sql, None, None
         return sql, df, fig
 
+    def ask_agent(self):
+        pass
+
     def train(
         self,
         question: str = None,
@@ -1921,6 +1928,7 @@ class VannaBase(ABC):
 
             self.log(message=f"Training on a plan:\n\n{"\n\n".join(item.item_value for item in plan._plan)}", title="Train on Plan", echo=False)
 
+    # ---------- Helper Methods
     def _get_databases(self) -> List[str]:
         try:
             print("Trying INFORMATION_SCHEMA.DATABASES")
