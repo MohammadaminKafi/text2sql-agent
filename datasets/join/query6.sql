@@ -1,7 +1,8 @@
-SELECT s.Name AS StoreName, p.FirstName, p.LastName, a.City, sp.Name AS StateProvince
-FROM Sales.Customer AS c
-JOIN Sales.Store AS s ON c.StoreID = s.BusinessEntityID
-JOIN Person.Person AS p ON c.PersonID = p.BusinessEntityID
-JOIN Sales.CustomerAddress AS ca ON c.CustomerID = ca.CustomerID
-JOIN Person.Address AS a ON ca.AddressID = a.AddressID
-JOIN Person.StateProvince AS sp ON a.StateProvinceID = sp.StateProvinceID;
+SELECT pc.Name AS Category,
+       COUNT(p.ProductID) AS ProductCount
+FROM Production.Product AS p
+JOIN Production.ProductSubcategory AS ps
+  ON p.ProductSubcategoryID = ps.ProductSubcategoryID
+JOIN Production.ProductCategory AS pc
+  ON ps.ProductCategoryID = pc.ProductCategoryID
+GROUP BY pc.Name;

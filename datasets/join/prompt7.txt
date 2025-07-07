@@ -1,8 +1,8 @@
 Well-Explained Prompt
-"Retrieve the sales order ID, customer name, city, state/province, and country for each sales order."
+"List current employees (those without an EndDate) with their IDs, names, and department, using EmployeeDepartmentHistory, Department, Employee, and Person."
 
 Poorly-Explained Prompt
-"Get order info with customer and place."
+"Who works where now?"
 
 Underspecified Prompt
-"Show order details."
+"Show employee departments."

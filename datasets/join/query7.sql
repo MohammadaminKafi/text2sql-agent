@@ -1,8 +1,12 @@
-SELECT soh.SalesOrderID, p.FirstName, p.LastName, a.City, sp.Name AS StateProvince, cr.Name AS Country
-FROM Sales.SalesOrderHeader AS soh
-JOIN Sales.Customer AS c ON soh.CustomerID = c.CustomerID
-JOIN Person.Person AS p ON c.PersonID = p.BusinessEntityID
-JOIN Sales.CustomerAddress AS ca ON c.CustomerID = ca.CustomerID
-JOIN Person.Address AS a ON ca.AddressID = a.AddressID
-JOIN Person.StateProvince AS sp ON a.StateProvinceID = sp.StateProvinceID
-JOIN Person.CountryRegion AS cr ON sp.CountryRegionCode = cr.CountryRegionCode;
+SELECT edh.BusinessEntityID,
+       p.FirstName,
+       p.LastName,
+       d.Name AS DepartmentName
+FROM HumanResources.EmployeeDepartmentHistory AS edh
+JOIN HumanResources.Department AS d
+  ON edh.DepartmentID = d.DepartmentID
+JOIN HumanResources.Employee AS e
+  ON edh.BusinessEntityID = e.BusinessEntityID
+JOIN Person.Person AS p
+  ON e.BusinessEntityID = p.BusinessEntityID
+WHERE edh.EndDate IS NULL;

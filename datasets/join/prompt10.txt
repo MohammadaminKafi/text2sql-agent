@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Find vendors supplying more than five distinct products; show vendor name, count of products, and sum of list‑price times vendor standard price."
+
+Poorly-Explained Prompt
+"Which vendors have lots of products?"
+
+Underspecified Prompt
+"List vendors and products."

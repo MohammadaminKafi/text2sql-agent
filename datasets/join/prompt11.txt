@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"List all products with their category and subcategory, and compute total quantity sold (zero if never sold), by joining Product → ProductSubcategory → ProductCategory and left‑joining SalesOrderDetail."
+
+Poorly-Explained Prompt
+"Show product sales by category."
+
+Underspecified Prompt
+"List products and their sales."

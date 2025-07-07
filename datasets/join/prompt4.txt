@@ -1,8 +1,8 @@
 Well-Explained Prompt
-"Retrieve the first and last names of customers along with their city and postal code, but only for those located in Seattle."
+"Find each customer's ID and full name along with the total amount they've spent across all orders, using the Customer, Person, and SalesOrderHeader tables."
 
 Poorly-Explained Prompt
-"Get customer info if they're from Seattle."
+"Show customer spending."
 
 Underspecified Prompt
-"Show customer names and where they live."
+"List customers and how much they spent."

@@ -1,9 +1,10 @@
-SELECT c.FirstName, c.LastName, a.City, a.PostalCode
-FROM Sales.Customer AS cu
-JOIN Person.Person AS c ON cu.PersonID = c.BusinessEntityID
-JOIN Person.Address AS a ON cu.CustomerID IN (
-    SELECT ca.CustomerID
-    FROM Sales.CustomerAddress AS ca
-    WHERE ca.AddressID = a.AddressID
-)
-WHERE a.City = 'Seattle';
+SELECT c.CustomerID,
+       p.FirstName,
+       p.LastName,
+       SUM(soh.TotalDue) AS TotalSpent
+FROM Sales.Customer AS c
+JOIN Person.Person AS p
+  ON c.PersonID = p.BusinessEntityID
+JOIN Sales.SalesOrderHeader AS soh
+  ON c.CustomerID = soh.CustomerID
+GROUP BY c.CustomerID, p.FirstName, p.LastName;
