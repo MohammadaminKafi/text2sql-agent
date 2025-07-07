@@ -17,7 +17,7 @@ Organized from simple to complex to help assess model capabilities across increa
 - `sorting`: ORDER BY (ASC/DESC).
 - `top_n`: Top N records using LIMIT, TOP, FETCH, or ROW_NUMBER.
 
-### String/Text Handling (dir:str)
+### String/Text Handling (dir: str)
 - `string_functions`: LIKE, UPPER/LOWER, LENGTH, CHARINDEX, etc.
 - `advanced_string`: SUBSTRING, REPLACE, CONCAT, and pattern matching.
 
