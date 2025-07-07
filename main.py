@@ -74,7 +74,8 @@ def main() -> None:
         q = input("\nAsk: ").strip()
         if q.lower() in {"exit", "quit"}:
             break
-        answer = vn.ask(question=q, visualize=False)
+        #answer = vn.ask(question=q, visualize=False)
+        answer = vn.ask_agent(question=q)
         print(answer)
 
 

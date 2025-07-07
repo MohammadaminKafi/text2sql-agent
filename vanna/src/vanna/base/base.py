@@ -65,6 +65,15 @@ import plotly.graph_objects as go
 import requests
 import sqlparse
 
+# Agent imports
+import dspy
+from langchain.chat_models import init_chat_model
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.prebuilt import create_react_agent
+from langchain_core.tools import StructuredTool
+from pydantic import Field, BaseModel as PydanticBaseModelForTool
+
+# Local imports
 from ..exceptions import DependencyError, ImproperlyConfigured, ValidationError
 from ..types import TrainingPlan, TrainingPlanItem
 from ..utils import validate_config_path
@@ -1869,8 +1878,58 @@ class VannaBase(ABC):
                 return sql, None, None
         return sql, df, fig
 
-    def ask_agent(self):
-        pass
+    def ask_agent(self, question : str) -> Tuple[str, pd.DataFrame]:
+        from no_commit_utils.credentials_utils import read_avalai_api_key
+
+        
+
+        # os.environ["OPENAI_API_KEY"] = read_avalai_api_key()
+        # memory = MemorySaver()
+
+        model = init_chat_model(
+                        model="gpt-4o", 
+                        model_provider="openai", 
+                        openai_api_base="https://api.avalapis.ir/v1",
+                        openai_api_key = read_avalai_api_key()
+                        )
+        
+        query_tool = StructuredTool.from_function(
+            func=self.agent_run_sql_query,
+            name="run_sql",
+            description = (
+                        "Execute a raw SQL query against the connected database and return the result "
+                        "as a Pandas DataFrame formatted in Markdown. Useful for reading, analyzing, "
+                        "or summarizing tabular data. The input should be a valid SQL query string. "
+                    ),
+            args_schema=QueryArgs
+        )
+
+        tools = [query_tool]
+        agent_executer = create_react_agent(model, tools=tools)
+        
+        # input_message = {"role": "user", "content": question}
+
+        # doc_list = self.get_related_documentation(question)
+
+        # prompt = self.get_sql_prompt(
+        #     initial_prompt=None,
+        #     question=question,
+        #     question_sql_list=[],
+        #     ddl_list=[],
+        #     doc_list=doc_list,
+        # )
+
+        prompt_content = (
+            "You are a T-SQL / Microsoft SQL Server expert. Please help to generate a SQL query to answer the question. "
+            "You are provided with a tool for querying the AdventureWorks2022 database. The tool name is \"run_sql\". "
+            f"The question is: {question}"
+        )
+
+        prompt = [{"role": "user", "content": prompt_content}]
+
+        response = agent_executer.invoke({"messages": prompt})
+
+        return response
 
     def train(
         self,
@@ -2249,7 +2308,6 @@ class VannaBase(ABC):
             self.log(message=f"Error fetching top rows from {table_name}: {e}", title="Exception in Fetch Table Rows")
             return None
 
-
     def llm_describe_table(self, doc: str, rows: pd.DataFrame) -> str:
         # Convert the sample rows to markdown for better formatting
         if rows is not None:
@@ -2285,4 +2343,9 @@ class VannaBase(ABC):
             self.log(message=f"Error prompting LLM: {e}", title="Exception in Prompt")
             return ""
         
-
+    # ---------- Agent Helper Methods
+    def agent_run_sql_query(self, query : str) -> str:
+        return self.run_sql(query).to_markdown()
+        
+class QueryArgs(PydanticBaseModelForTool):
+    query: str = Field(..., description="SQL query to be executed")
