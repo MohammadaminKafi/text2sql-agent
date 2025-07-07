@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Get the product name, standard price, vendor name and credit rating, and English product type for all products."
+
+Poorly-Explained Prompt
+"Show me products with prices and vendor info."
+
+Underspecified Prompt
+"Get product and vendor data."

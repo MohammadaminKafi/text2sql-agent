@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Retrieve the sales order ID, customer name, city, state/province, and country for each sales order."
+
+Poorly-Explained Prompt
+"Get order info with customer and place."
+
+Underspecified Prompt
+"Show order details."

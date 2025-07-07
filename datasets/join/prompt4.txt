@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Retrieve the first and last names of customers along with their city and postal code, but only for those located in Seattle."
+
+Poorly-Explained Prompt
+"Get customer info if they're from Seattle."
+
+Underspecified Prompt
+"Show customer names and where they live."

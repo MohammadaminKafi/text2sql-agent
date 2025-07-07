@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"List store names along with the first and last names of associated customers, including their city and state/province."
+
+Poorly-Explained Prompt
+"Show store and customer name and where they are."
+
+Underspecified Prompt
+"Get some store and customer info."

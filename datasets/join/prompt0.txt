@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Retrieve the product name, order date, and total due for sales orders where the total due exceeds $10,000. Include only products that were part of those orders and sort by order date in descending order."
+
+Poorly-Explained Prompt
+"Get products and order stuff where total is big and sort by newest."
+
+Underspecified Prompt
+"Show me some product sales."

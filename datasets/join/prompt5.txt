@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"List the product name, quantity, location ID, and location name for inventory records where the quantity is between 100 and 300 units. Sort the results by quantity in descending order."
+
+Poorly-Explained Prompt
+"Which items have a medium amount in stock?"
+
+Underspecified Prompt
+"Give me product inventory info."

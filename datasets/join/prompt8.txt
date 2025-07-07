@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"List employee IDs, names, departments, shift names, and hire dates for all employees."
+
+Poorly-Explained Prompt
+"Tell me about employees and where they work."
+
+Underspecified Prompt
+"Give me employee info."
