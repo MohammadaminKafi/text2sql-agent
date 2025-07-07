@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Aggregate sales by territory: number of distinct customers, total freight, and average freight, ordered by total freight descending."
+
+Poorly-Explained Prompt
+"Territory shipping costs."
+
+Underspecified Prompt
+"Show freight per territory."

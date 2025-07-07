@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Mark each Product whose Name contains 'bike' (case-insensitive) by returning ProductID, Name, and a flag 'ContainsBike' or 'Other', filtered to only those containing 'bike', ordered by Name."
+
+Poorly-Explained Prompt
+"Flag bike products."
+
+Underspecified Prompt
+"Show products with bike."

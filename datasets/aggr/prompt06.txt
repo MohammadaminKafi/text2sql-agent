@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Identify customers with more than 10 orders; for each, show their ID, number of orders, sum of subtotals, and highest total‑due order, sorted by subtotal descending."
+
+Poorly-Explained Prompt
+"Show customers who order a lot and their spending."
+
+Underspecified Prompt
+"Show customer order aggregates."

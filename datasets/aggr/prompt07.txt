@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"List customers whose total spending exceeds the overall average order total, showing their ID, number of orders, and total spent, ordered by spending descending."
+
+Poorly-Explained Prompt
+"Big spenders above average."
+
+Underspecified Prompt
+"Show top customers spending."

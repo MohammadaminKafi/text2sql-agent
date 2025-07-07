@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Split each product’s Name into the first word and the remainder, for products whose Name contains at least one space, showing ProductID, ProductName, FirstWord, and RestOfName."
+
+Poorly-Explained Prompt
+"Break product names into words."
+
+Underspecified Prompt
+"Parse product names."

@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Identify customers whose average order value exceeds the average order value for all orders placed in 2011; show their ID, number of orders, total spent, and average order value, sorted by total spent descending."
+
+Poorly-Explained Prompt
+"Show customers with higher average orders than year 2011."
+
+Underspecified Prompt
+"Customer average order values."

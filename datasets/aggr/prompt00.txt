@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Calculate yearly order statistics: count of orders, total subtotal amount, and average tax amount, grouped and ordered by the year of OrderDate."
+
+Poorly-Explained Prompt
+"Show annual orders and tax."
+
+Underspecified Prompt
+"Give me order stats per year."

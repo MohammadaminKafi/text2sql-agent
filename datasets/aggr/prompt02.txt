@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"For each product category, count distinct products, compute average and maximum list price, and order categories by average price descending."
+
+Poorly-Explained Prompt
+"Show category stats for products."
+
+Underspecified Prompt
+"List categories with product prices."

@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"For each product sold by more than one vendor, concatenate all its vendor StandardPrice values into a semicolon-separated PricesList using XML PATH and STUFF, showing ProductID, Name, and PricesList."
+
+Poorly-Explained Prompt
+"List product prices from vendors."
+
+Underspecified Prompt
+"Show vendor prices per product."

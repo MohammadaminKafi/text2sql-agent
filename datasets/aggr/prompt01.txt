@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"List customers who have spent more than $5,000 total, showing their ID, count of orders, and total amount spent, sorted by spending descending."
+
+Poorly-Explained Prompt
+"Find big spenders."
+
+Underspecified Prompt
+"Show customer spending."
