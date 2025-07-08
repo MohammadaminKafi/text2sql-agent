@@ -1,1 +1,8 @@
-# Prompt placeholder for 06
+Well-Explained Prompt
+"Find salespeople who have processed orders where the total due is greater than 1000. Show their business entity ID, first name, and last name."
+
+Poorly-Explained Prompt
+"Get salespeople with high-value orders."
+
+Underspecified Prompt
+"List salespeople."
