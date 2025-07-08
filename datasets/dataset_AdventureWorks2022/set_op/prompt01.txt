@@ -1,1 +1,8 @@
-# Prompt placeholder for 01
+Well-Explained Prompt
+"List employees who were hired before January 1, 2020, but exclude those whose job title is 'Manager'. Show their business entity ID, first name, and last name."
+
+Poorly-Explained Prompt
+"Get employees hired before 2020 except managers."
+
+Underspecified Prompt
+"Show employees hired before 2020."

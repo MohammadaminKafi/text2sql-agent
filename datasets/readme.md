@@ -1,9 +1,5 @@
 Organized from simple to complex to help assess model capabilities across increasing levels of SQL complexity.
 
-### Basic Queries (dir: basic)
-- `basic_select`: Single-table SELECT queries without WHERE clause.
-- `conditional_select`: SELECT with simple WHERE conditions.
-
 ### Joins (dir: join)
 - `single_join`: Query with one JOIN between two related tables.
 - `double_join`: JOIN between three tables.

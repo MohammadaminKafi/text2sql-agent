@@ -1,1 +1,8 @@
-# Prompt placeholder for 02
+Well-Explained Prompt
+"List salespeople who have processed orders with a total due greater than 1000, but exclude those who processed orders before January 1, 2012. Show their business entity ID, first name, and last name."
+
+Poorly-Explained Prompt
+"Get salespeople with high-value orders after 2012."
+
+Underspecified Prompt
+"Show salespeople with orders."
