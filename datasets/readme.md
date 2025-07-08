@@ -37,3 +37,5 @@ Organized from simple to complex to help assess model capabilities across increa
 
 ### Set Operations (dir: set_op)
 - `union_intersect_except`: Queries using UNION, INTERSECT, EXCEPT.
+
+### Date (dir: date)
