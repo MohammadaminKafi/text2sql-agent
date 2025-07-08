@@ -7,14 +7,12 @@ class OpenAI_Embeddings(VannaBase):
     def __init__(self, client=None, config=None):
         VannaBase.__init__(self, config=config)
 
+        self.client = None
+
         if client is not None:
             self.client = client
-            return
-
-        if self.client is not None:
-            return
-
-        self.client = OpenAI()
+        else:
+            self.client = OpenAI()
 
         if config is None:
             return
