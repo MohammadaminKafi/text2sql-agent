@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import csv
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Tuple
 import argparse
+from pprint import pprint
 
 import pandas as pd
 from openai import OpenAI
@@ -46,8 +48,8 @@ class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
         OpenAI_Chat.__init__(self, config=llm_config or {}, client=client)
 
 
-DATASET_DIR = Path(__file__).resolve().parent / "dataset_AdventureWorks2022"
-LOG_DIR = Path(__file__).resolve().parent / "logs"
+DATASET_DIR = Path(__file__).resolve().parent / "datasets" / "dataset_AdventureWorks2022"
+LOG_DIR = Path(__file__).resolve().parent / "log" / "dataset_test"
 LOG_DIR.mkdir(exist_ok=True)
 
 # Default connection string
@@ -144,7 +146,11 @@ def compare_frames(gt: pd.DataFrame, out: pd.DataFrame) -> str:
         else:
             parts.append("less_rows")
 
-    merged = pd.merge(out, gt, how="inner")
+    try:
+        merged = pd.merge(out, gt, how="inner")
+    except:
+        merged = pd.DataFrame()
+        
     if merged.empty:
         parts.append("rows_no_match")
     elif len(merged) < min(len(gt), len(out)):
@@ -188,6 +194,10 @@ def run_test_case(
 def main() -> None:
     args = parse_args()
 
+    print("\nArguments:")
+    for key, value in vars(args).items():
+        print(f"{key.replace('_', ' ').title()}: {value}")
+
     dataset_dir = args.dataset_dir
     log_dir = args.log_dir
     log_dir.mkdir(exist_ok=True)
@@ -195,11 +205,18 @@ def main() -> None:
     openai_cfg = {"api_key": read_avalai_api_key()}
     all_tests = collect_tests(dataset_dir)
     total = sum(len(v) for v in all_tests.values())
+    print(f"\nNumber of tests: {total}")
 
     vn = MyVanna(openai_config=openai_cfg, llm_config={"model": args.model})
     vn.connect_to_mssql(odbc_conn_str=args.conn_str)
     model_dir = log_dir / args.model
     model_dir.mkdir(exist_ok=True)
+
+    if vn.run_sql_is_set:
+        print("\nVanna is connected to the database")
+
+    if True or vn.test_llm_connection():
+        print("\nVanna is connected to the LLM provider")
 
     test_count = 0
     start = time.time()
@@ -223,6 +240,7 @@ def main() -> None:
             cat_total = 0
 
             for idx, (sql_path, prompt_path, prompts) in enumerate(cases, start=1):
+                print(f"Testing on test case {category}-{idx}")
                 gt_path = cat_dir / f"case{idx:02d}_gt.csv"
                 if gt_path.exists():
                     gt_df = pd.read_csv(gt_path)
@@ -231,14 +249,16 @@ def main() -> None:
                     gt_df.to_csv(gt_path, index=False)
 
                 prompt_order = [
-                    ("well", prompts.get("Well-Explained")),
-                    ("poor", prompts.get("Poorly-Explained")),
-                    ("under", prompts.get("Underspecified")),
+                    ("well", prompts.get("well-explained")),
+                    ("poor", prompts.get("poorly-explained")),
+                    ("under", prompts.get("underspecified")),
                 ]
                 prompt_order = [p for p in prompt_order if p[1] is not None]
                 prompt_order = prompt_order[:args.level]
 
+
                 for p_type, p_text in prompt_order:
+                    print(f"\tTesting on prompt type {p_type}")
                     test_count += 1
                     prog = (test_count / (total * args.level)) * 100
                     elapsed = time.time() - start

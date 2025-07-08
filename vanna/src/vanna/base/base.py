@@ -92,6 +92,8 @@ class VannaBase(ABC):
         self.max_tokens = self.config.get("max_tokens", 14000)
         self.current_thread_name = None
         self.current_log_id = None
+        self.save_log = self.config.get("save_log", True)
+        self.verbose = self.config.get("verbose", False)
 
     # ---------- Test Methods
     def test_llm_connection(self):
@@ -113,46 +115,48 @@ class VannaBase(ABC):
 
     # ---------- Log Methods
     def create_new_thread(self, thread_type='chat'):
-        now = datetime.now()
-        current_time = now.strftime("%Y-%m-%d-%H-%M-%S")
-        self.current_thread_name = f"{thread_type}-{current_time}"
-        self.current_log_id = 0
+        if self.save_log:
+            now = datetime.now()
+            current_time = now.strftime("%Y-%m-%d-%H-%M-%S")
+            self.current_thread_name = f"{thread_type}-{current_time}"
+            self.current_log_id = 0
 
     def log_df(self, df: pd.DataFrame, path):
         df.to_csv(path, index=False)
 
     def log(self, message: str, title: str = "Info", echo: bool = True, save_df: bool = False, df: pd.DataFrame | None = None):
-        # Ensure thread name is set
-        if not self.current_thread_name:
-            raise ValueError("current_thread_name is not set.")
+        if self.save_log:
+            # Ensure thread name is set
+            if not self.current_thread_name:
+                raise ValueError("current_thread_name is not set.")
+            
+            # Ensure log ID is initialized
+            if self.current_log_id is None:
+                self.current_log_id = 0
         
-        # Ensure log ID is initialized
-        if self.current_log_id is None:
-            self.current_log_id = 0
-    
-        # Create directory if it doesn't exist
-        log_dir = f"./log/{self.current_thread_name}"
-        os.makedirs(log_dir, exist_ok=True)
-    
-        # Define file path
-        filename = f"{self.current_log_id:02d}-{title}.txt"
-        filepath = os.path.join(log_dir, filename)
-    
-        # Save log message to file
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(str(message))
-    
-        if save_df:
-            df_name = f"{self.current_log_id:02d}-dataframe.csv"
-            df_path = os.path.join(log_dir, df_name)
-            self.log_df(path=df_path, df=df)
+            # Create directory if it doesn't exist
+            log_dir = f"./log/{self.current_thread_name}"
+            os.makedirs(log_dir, exist_ok=True)
+        
+            # Define file path
+            filename = f"{self.current_log_id:02d}-{title}.txt"
+            filepath = os.path.join(log_dir, filename)
+        
+            # Save log message to file
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(str(message))
+        
+            if save_df:
+                df_name = f"{self.current_log_id:02d}-dataframe.csv"
+                df_path = os.path.join(log_dir, df_name)
+                self.log_df(path=df_path, df=df)
+
+            self.current_log_id += 1
 
         # Print to console if echo
-        if echo:
+        if echo and self.verbose:
             print(f"{title}: {message}")
     
-        self.current_log_id += 1
-
     def _response_language(self) -> str:
         if self.language is None:
             return ""
