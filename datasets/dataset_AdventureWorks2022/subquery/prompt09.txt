@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Return the name and list price of products that are more expensive than the average price in their subcategory, along with the average and maximum prices in that subcategory."
+
+Poorly-Explained Prompt
+"Get products that are more expensive than others in their category with some price stats."
+
+Underspecified Prompt
+"Show products and prices."

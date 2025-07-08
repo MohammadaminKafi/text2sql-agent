@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"List salespersons who have made sales with total amounts over 500, showing their ID, name, total sales, and average sales amount."
+
+Poorly-Explained Prompt
+"Salespeople with big sales and their stats."
+
+Underspecified Prompt
+"List salespeople."

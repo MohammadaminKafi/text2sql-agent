@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"List employees whose current hourly rate is above the overall company average. Include their ID, first name, last name and rate."
+
+Poorly-Explained Prompt
+"Who gets paid more than most?"
+
+Underspecified Prompt
+"Give me some employee salaries."

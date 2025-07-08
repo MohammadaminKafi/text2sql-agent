@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Return every product whose list price is higher than the average for other products in the same subcategory. Show the product ID, name and list price."
+
+Poorly-Explained Prompt
+"Get the pricey products in each product group."
+
+Underspecified Prompt
+"Show product names and prices."

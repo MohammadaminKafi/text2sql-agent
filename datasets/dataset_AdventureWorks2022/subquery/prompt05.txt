@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Return product categories that contain more products than the average category. Include the category ID, name and product count."
+
+Poorly-Explained Prompt
+"Categories with lots of stuff."
+
+Underspecified Prompt
+"Show categories."

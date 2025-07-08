@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Find inventory records where the quantity for a product at a specific location is below that product’s average quantity across all locations. Show product ID, name and the low quantity."
+
+Poorly-Explained Prompt
+"Low stock items."
+
+Underspecified Prompt
+"Show inventory."
