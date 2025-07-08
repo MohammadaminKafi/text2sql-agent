@@ -183,7 +183,7 @@ def test_n_results():
     for i in range(1, 10):
         vn_chroma.train(documentation=f"Sample documentation {i}")
 
-    question = "Whare are the top 5 customers by sales?"
+    question = "What are the top 5 customers by sales?"
     assert len(vn_chroma_n_results.get_related_ddl(question)) == 1
     assert len(vn_chroma_n_results.get_related_documentation(question)) == 1
     assert len(vn_chroma_n_results.get_similar_question_sql(question)) == 1
