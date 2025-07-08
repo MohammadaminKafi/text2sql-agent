@@ -159,6 +159,114 @@ def compare_frames(gt: pd.DataFrame, out: pd.DataFrame) -> str:
     return ",".join(parts) if parts else "mismatch"
 
 
+def compare_dataframes_as_dataframe_safe(gt_df: pd.DataFrame, out_df: pd.DataFrame):
+    result_dict = {
+        'Metric': [
+            'gt_rows', 'out_rows', 'gt_not_in_out', 'out_not_in_gt', 'common_rows',
+            'gt_cols', 'out_cols', 'gt_not_in_out_cols', 'out_not_in_gt_cols', 'common_cols',
+            'exact_match', 'gt_in_out', 'out_in_gt', 'ordered_same', 'cols_type_match'
+        ],
+        'Value': []
+    }
+    
+    # Safe calculation for each field with try-except blocks
+    try:
+        gt_rows = len(gt_df)
+    except Exception:
+        gt_rows = None
+    result_dict['Value'].append(gt_rows)
+
+    try:
+        out_rows = len(out_df)
+    except Exception:
+        out_rows = None
+    result_dict['Value'].append(out_rows)
+
+    try:
+        gt_not_in_out = len(pd.merge(gt_df, out_df, how='left', indicator=True).query('_merge == "left_only"'))
+    except Exception:
+        gt_not_in_out = None
+    result_dict['Value'].append(gt_not_in_out)
+
+    try:
+        out_not_in_gt = len(pd.merge(out_df, gt_df, how='left', indicator=True).query('_merge == "left_only"'))
+    except Exception:
+        out_not_in_gt = None
+    result_dict['Value'].append(out_not_in_gt)
+
+    try:
+        common_rows = len(pd.merge(gt_df, out_df, how='inner'))
+    except Exception:
+        common_rows = None
+    result_dict['Value'].append(common_rows)
+
+    try:
+        gt_cols = len(gt_df.columns)
+    except Exception:
+        gt_cols = None
+    result_dict['Value'].append(gt_cols)
+
+    try:
+        out_cols = len(out_df.columns)
+    except Exception:
+        out_cols = None
+    result_dict['Value'].append(out_cols)
+
+    try:
+        gt_not_in_out_cols = len(set(gt_df.columns) - set(out_df.columns))
+    except Exception:
+        gt_not_in_out_cols = None
+    result_dict['Value'].append(gt_not_in_out_cols)
+
+    try:
+        out_not_in_gt_cols = len(set(out_df.columns) - set(gt_df.columns))
+    except Exception:
+        out_not_in_gt_cols = None
+    result_dict['Value'].append(out_not_in_gt_cols)
+
+    try:
+        common_cols = len(set(gt_df.columns) & set(out_df.columns))
+    except Exception:
+        common_cols = None
+    result_dict['Value'].append(common_cols)
+
+    try:
+        exact_match = gt_df.equals(out_df)
+    except Exception:
+        exact_match = None
+    result_dict['Value'].append(exact_match)
+
+    try:
+        gt_in_out = gt_df.shape[0] <= out_df.shape[0] and gt_df.columns.isin(out_df.columns).all() and gt_df.equals(out_df.iloc[:gt_df.shape[0], :])
+    except Exception:
+        gt_in_out = None
+    result_dict['Value'].append(gt_in_out)
+
+    try:
+        out_in_gt = out_df.shape[0] <= gt_df.shape[0] and out_df.columns.isin(gt_df.columns).all() and out_df.equals(gt_df.iloc[:out_df.shape[0], :])
+    except Exception:
+        out_in_gt = None
+    result_dict['Value'].append(out_in_gt)
+
+    try:
+        ordered_same = gt_df.equals(out_df)  # checks both values and order
+    except Exception:
+        ordered_same = None
+    result_dict['Value'].append(ordered_same)
+
+    try:
+        cols_type_match = (gt_df.dtypes == out_df.dtypes).all()
+    except Exception:
+        cols_type_match = None
+    result_dict['Value'].append(cols_type_match)
+
+    # Return the result as a DataFrame
+    return pd.DataFrame(result_dict)
+
+
+def generate_final_report():
+    pass
+
 def run_test_case(
     vn: VannaBase,
     prompt: str,
@@ -222,10 +330,12 @@ def main() -> None:
     start = time.time()
     category_stats: Dict[str, Tuple[int, int]] = {}
 
+
     for category, cases in all_tests.items():
         cat_dir = model_dir / category
         cat_dir.mkdir(exist_ok=True)
         summary_path = cat_dir / "summary.csv"
+        
         with open(summary_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow([
@@ -234,10 +344,16 @@ def main() -> None:
                 "status",
                 "sql_path",
                 "output_path",
+                "gt_rows", "out_rows", "gt_not_in_out", "out_not_in_gt", "common_rows",
+                "gt_cols", "out_cols", "gt_not_in_out_cols", "out_not_in_gt_cols", "common_cols",
+                "exact_match", "gt_in_out", "out_in_gt", "ordered_same", "cols_type_match"
             ])
 
             cat_success = 0
             cat_total = 0
+            test_count = 0
+            total = len(all_tests)
+            start = time.time()
 
             for idx, (sql_path, prompt_path, prompts) in enumerate(cases, start=1):
                 print(f"Testing on test case {category}-{idx}")
@@ -256,26 +372,35 @@ def main() -> None:
                 prompt_order = [p for p in prompt_order if p[1] is not None]
                 prompt_order = prompt_order[:args.level]
 
-
                 for p_type, p_text in prompt_order:
                     print(f"\tTesting on prompt type {p_type}")
                     test_count += 1
                     prog = (test_count / (total * args.level)) * 100
                     elapsed = time.time() - start
                     eta = (elapsed / test_count) * ((total * args.level) - test_count)
-                    print(
-                        f"{args.model} | {category} case {idx} {p_type}: {prog:.1f}% ETA {eta:.1f}s"
-                    )
+                    print(f"{args.model} | {category} case {idx} {p_type}: {prog:.1f}% ETA {eta:.1f}s")
+                    
                     df_out, status = run_test_case(
                         vn, p_text, sql_path.read_text(), gt_df, args.method
                     )
                     out_path = cat_dir / f"case{idx:02d}_{p_type}.csv"
+                    
                     if df_out is not None:
                         df_out.to_csv(out_path, index=False)
-                    writer.writerow([idx, p_type, status, sql_path.name, out_path.name])
+
+                    # Compare the dataframes and aggregate the result
+                    comparison_result = compare_dataframes_as_dataframe_safe(gt_df, df_out)
+
+                    # Flatten the comparison result to append it to the CSV row
+                    comparison_values = comparison_result['Value'].tolist()
+
+                    # Write the results in the summary CSV
+                    writer.writerow([idx, p_type, status, sql_path.name, out_path.name] + comparison_values)
+
                     cat_total += 1
                     if status == "exact_match":
                         cat_success += 1
+
             category_stats[category] = (cat_success, cat_total)
 
     agg_path = model_dir / "aggregate_summary.csv"
