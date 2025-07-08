@@ -13,6 +13,7 @@ import os
 import time
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Tuple
+import argparse
 
 import pandas as pd
 from openai import OpenAI
@@ -49,17 +50,30 @@ DATASET_DIR = Path(__file__).resolve().parent / "dataset_AdventureWorks2022"
 LOG_DIR = Path(__file__).resolve().parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
-# [model_name, vanna_method, test_level]
-TEST_CONFIGS: List[List] = [
-    ["gpt-4o", "ask", 1],
-]
-
+# Default connection string
 CONN_STR = (
     "DRIVER={ODBC Driver 17 for SQL Server};"
     "SERVER=localhost;"
     "DATABASE=AdventureWorks2022;"
     "Trusted_Connection=yes;"
 )
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Run dataset tests")
+    parser.add_argument("--dataset-dir", type=Path, default=DATASET_DIR,
+                        help="Directory containing prompt/query pairs")
+    parser.add_argument("--log-dir", type=Path, default=LOG_DIR,
+                        help="Directory to write logs")
+    parser.add_argument("--conn-str", default=CONN_STR,
+                        help="ODBC connection string for ground truth queries")
+    parser.add_argument("--model", default="gpt-4o",
+                        help="Model name to evaluate")
+    parser.add_argument("--method", choices=["ask", "ask_agent"], default="ask",
+                        help="Vanna method to invoke")
+    parser.add_argument("--level", type=int, default=1,
+                        help="Number of prompt variants to evaluate")
+    return parser.parse_args()
 
 
 def load_prompt(path: Path) -> Dict[str, str]:
@@ -144,13 +158,25 @@ def run_test_case(
     prompt: str,
     ground_sql: str,
     gt_df: pd.DataFrame,
+    method: str,
 ) -> Tuple[pd.DataFrame | None, str]:
     """Execute a single test case and return the resulting dataframe and status."""
 
     try:
         if prompt is None:
             return None, "no_prompt"
-        sql, df, _ = vn.ask(question=prompt, print_results=False, visualize=False)
+        if method == "ask_agent":
+            result = vn.ask_agent(question=prompt)
+            if isinstance(result, tuple):
+                df = result[1] if len(result) > 1 else None
+            elif isinstance(result, pd.DataFrame):
+                df = result
+            elif isinstance(result, str):
+                df = vn.run_sql(result)
+            else:
+                df = None
+        else:
+            _, df, _ = vn.ask(question=prompt, print_results=False, visualize=False)
     except Exception:
         return None, "failed_run"
     if df is None:
@@ -160,61 +186,91 @@ def run_test_case(
 
 
 def main() -> None:
+    args = parse_args()
+
+    dataset_dir = args.dataset_dir
+    log_dir = args.log_dir
+    log_dir.mkdir(exist_ok=True)
+
     openai_cfg = {"api_key": read_avalai_api_key()}
-    all_tests = collect_tests(DATASET_DIR)
+    all_tests = collect_tests(dataset_dir)
     total = sum(len(v) for v in all_tests.values())
 
-    for model_name, method_name, level in TEST_CONFIGS:
-        vn = MyVanna(openai_config=openai_cfg, llm_config={"model": model_name})
-        vn.connect_to_mssql(odbc_conn_str=CONN_STR)
-        model_dir = LOG_DIR / model_name
-        model_dir.mkdir(exist_ok=True)
+    vn = MyVanna(openai_config=openai_cfg, llm_config={"model": args.model})
+    vn.connect_to_mssql(odbc_conn_str=args.conn_str)
+    model_dir = log_dir / args.model
+    model_dir.mkdir(exist_ok=True)
 
-        test_count = 0
-        start = time.time()
+    test_count = 0
+    start = time.time()
+    category_stats: Dict[str, Tuple[int, int]] = {}
 
-        for category, cases in all_tests.items():
-            cat_dir = model_dir / category
-            cat_dir.mkdir(exist_ok=True)
-            summary_path = cat_dir / "summary.csv"
-            with open(summary_path, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow([
-                    "case",
-                    "prompt_type",
-                    "status",
-                    "sql_path",
-                    "output_path",
-                ])
+    for category, cases in all_tests.items():
+        cat_dir = model_dir / category
+        cat_dir.mkdir(exist_ok=True)
+        summary_path = cat_dir / "summary.csv"
+        with open(summary_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "case",
+                "prompt_type",
+                "status",
+                "sql_path",
+                "output_path",
+            ])
 
-                for idx, (sql_path, prompt_path, prompts) in enumerate(cases, start=1):
+            cat_success = 0
+            cat_total = 0
+
+            for idx, (sql_path, prompt_path, prompts) in enumerate(cases, start=1):
+                gt_path = cat_dir / f"case{idx:02d}_gt.csv"
+                if gt_path.exists():
+                    gt_df = pd.read_csv(gt_path)
+                else:
                     gt_df = vn.run_sql(sql_path.read_text())
-                    gt_path = cat_dir / f"case{idx:02d}_gt.csv"
                     gt_df.to_csv(gt_path, index=False)
 
-                    prompt_order = [
-                        ("well", prompts.get("Well-Explained")),
-                        ("poor", prompts.get("Poorly-Explained")),
-                        ("under", prompts.get("Underspecified")),
-                    ]
-                    prompt_order = [p for p in prompt_order if p[1] is not None]
-                    prompt_order = prompt_order[:level]
+                prompt_order = [
+                    ("well", prompts.get("Well-Explained")),
+                    ("poor", prompts.get("Poorly-Explained")),
+                    ("under", prompts.get("Underspecified")),
+                ]
+                prompt_order = [p for p in prompt_order if p[1] is not None]
+                prompt_order = prompt_order[:args.level]
 
-                    for p_type, p_text in prompt_order:
-                        test_count += 1
-                        prog = (test_count / (total * level)) * 100
-                        elapsed = time.time() - start
-                        eta = (elapsed / test_count) * ((total * level) - test_count)
-                        print(
-                            f"{model_name} | {category} case {idx} {p_type}: {prog:.1f}% ETA {eta:.1f}s"
-                        )
-                        df_out, status = run_test_case(
-                            vn, p_text, sql_path.read_text(), gt_df
-                        )
-                        out_path = cat_dir / f"case{idx:02d}_{p_type}.csv"
-                        if df_out is not None:
-                            df_out.to_csv(out_path, index=False)
-                        writer.writerow([idx, p_type, status, sql_path.name, out_path.name])
+                for p_type, p_text in prompt_order:
+                    test_count += 1
+                    prog = (test_count / (total * args.level)) * 100
+                    elapsed = time.time() - start
+                    eta = (elapsed / test_count) * ((total * args.level) - test_count)
+                    print(
+                        f"{args.model} | {category} case {idx} {p_type}: {prog:.1f}% ETA {eta:.1f}s"
+                    )
+                    df_out, status = run_test_case(
+                        vn, p_text, sql_path.read_text(), gt_df, args.method
+                    )
+                    out_path = cat_dir / f"case{idx:02d}_{p_type}.csv"
+                    if df_out is not None:
+                        df_out.to_csv(out_path, index=False)
+                    writer.writerow([idx, p_type, status, sql_path.name, out_path.name])
+                    cat_total += 1
+                    if status == "exact_match":
+                        cat_success += 1
+            category_stats[category] = (cat_success, cat_total)
+
+    agg_path = model_dir / "aggregate_summary.csv"
+    with open(agg_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["category", "total_cases", "exact_match", "accuracy"])
+        total_s = 0
+        total_c = 0
+        for cat, (succ, tot) in category_stats.items():
+            acc = succ / tot if tot else 0
+            writer.writerow([cat, tot, succ, f"{acc:.3f}"])
+            total_s += succ
+            total_c += tot
+        overall = total_s / total_c if total_c else 0
+        writer.writerow(["OVERALL", total_c, total_s, f"{overall:.3f}"])
 
 
 if __name__ == "__main__":

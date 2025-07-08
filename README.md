@@ -32,6 +32,15 @@ Example prompts and queries live under `datasets/`. They are organized by SQL co
 
 See [`datasets/readme.md`](datasets/readme.md) for full details on each directory.
 
+### Automated dataset testing
+The `datasets/test_dataset_aw.py` script can run all prompt/query pairs against a
+Vanna model and generate CSV reports. It now supports command line arguments to
+configure the dataset location, connection string, model name, method
+(`ask` or `ask_agent`), and test level (number of prompt variants). Ground truth
+query results are cached to avoid re-running SQL on subsequent executions. After
+all tests finish an aggregate summary CSV is written with per-category accuracy
+and overall success rate.
+
 ## Getting Started
 Install requirements and then run the main script:
 ```bash
