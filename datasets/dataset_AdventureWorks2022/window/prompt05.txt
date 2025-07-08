@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Find the total sales for each product, and rank them within their respective subcategory based on total sales in descending order. Show the product ID, name, total sales, and sales rank."
+
+Poorly-Explained Prompt
+"Get products and their rank based on sales."
+
+Underspecified Prompt
+"Show products and their sales."

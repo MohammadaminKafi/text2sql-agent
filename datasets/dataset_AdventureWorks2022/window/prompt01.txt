@@ -1,0 +1,8 @@
+Well-Explained Prompt
+"Show the name and list price of each product, and rank them within each subcategory based on their list price in descending order. The most expensive product in each subcategory will receive rank 1."
+
+Poorly-Explained Prompt
+"Give me products and their ranking based on price."
+
+Underspecified Prompt
+"List products with their prices."

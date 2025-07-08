@@ -1,0 +1,1 @@
+-- SQL query placeholder for 00
