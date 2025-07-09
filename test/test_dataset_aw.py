@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Tuple
 import argparse
-from pprint import pprint
+from datetime import datetime
 
 import pandas as pd
 from openai import OpenAI
@@ -317,17 +317,17 @@ def main() -> None:
 
     vn = MyVanna(openai_config=openai_cfg, llm_config={"model": args.model})
     vn.connect_to_mssql(odbc_conn_str=args.conn_str)
-    model_dir = log_dir / args.model
+    current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    model_dir = log_dir / f"{args.model}-{args.method}-{current_time}"
     model_dir.mkdir(exist_ok=True)
 
     if vn.run_sql_is_set:
         print("\nVanna is connected to the database")
 
-    if True or vn.test_llm_connection():
+    if vn.test_llm_connection():
         print("\nVanna is connected to the LLM provider")
 
     test_count = 0
-    start = time.time()
     category_stats: Dict[str, Tuple[int, int]] = {}
 
 
@@ -353,9 +353,8 @@ def main() -> None:
             cat_total = 0
             test_count = 0
             total = len(all_tests)
-            start = time.time()
 
-            for idx, (sql_path, prompt_path, prompts) in enumerate(cases, start=1):
+            for idx, (sql_path, prompt_path, prompts) in enumerate(cases, start=0):
                 print(f"Testing on test case {category}-{idx}")
                 gt_path = cat_dir / f"case{idx:02d}_gt.csv"
                 if gt_path.exists():
@@ -373,12 +372,8 @@ def main() -> None:
                 prompt_order = prompt_order[:args.level]
 
                 for p_type, p_text in prompt_order:
-                    print(f"\tTesting on prompt type {p_type}")
                     test_count += 1
-                    prog = (test_count / (total * args.level)) * 100
-                    elapsed = time.time() - start
-                    eta = (elapsed / test_count) * ((total * args.level) - test_count)
-                    print(f"{args.model} | {category} case {idx} {p_type}: {prog:.1f}% ETA {eta:.1f}s")
+                    print(f"{args.model} | {category}-{idx} {p_type}")
                     
                     df_out, status = run_test_case(
                         vn, p_text, sql_path.read_text(), gt_df, args.method

@@ -94,6 +94,7 @@ class VannaBase(ABC):
         self.current_log_id = None
         self.save_log = self.config.get("save_log", True)
         self.verbose = self.config.get("verbose", False)
+        self.log_dir = self.config.get("log_dir", "log")
 
     # ---------- Test Methods
     def test_llm_connection(self):
@@ -135,7 +136,7 @@ class VannaBase(ABC):
                 self.current_log_id = 0
         
             # Create directory if it doesn't exist
-            log_dir = f"./log/{self.current_thread_name}"
+            log_dir = f"./{self.log_dir}/{self.current_thread_name}"
             os.makedirs(log_dir, exist_ok=True)
         
             # Define file path
