@@ -114,49 +114,6 @@ def collect_tests(dataset_dir: Path) -> Dict[str, List[Tuple[Path, Path, Dict[st
     return tests
 
 
-def compare_frames(gt: pd.DataFrame, out: pd.DataFrame) -> str:
-    """Rough dataframe comparison returning a status string."""
-
-    try:
-        if out.equals(gt):
-            return "exact_match"
-    except Exception:
-        pass
-
-    gt_cols = list(gt.columns)
-    out_cols = list(out.columns)
-    parts: List[str] = []
-
-    if out_cols != gt_cols:
-        if set(out_cols) == set(gt_cols):
-            parts.append("wrong_order")
-        else:
-            if len(out_cols) > len(gt_cols):
-                parts.append("more_cols")
-            if len(out_cols) < len(gt_cols):
-                parts.append("less_cols")
-            if not set(out_cols).issubset(set(gt_cols)) and not set(gt_cols).issubset(
-                set(out_cols)
-            ):
-                parts.append("cols_partial")
-
-    if len(out) != len(gt):
-        if len(out) > len(gt):
-            parts.append("more_rows")
-        else:
-            parts.append("less_rows")
-
-    try:
-        merged = pd.merge(out, gt, how="inner")
-    except:
-        merged = pd.DataFrame()
-        
-    if merged.empty:
-        parts.append("rows_no_match")
-    elif len(merged) < min(len(gt), len(out)):
-        parts.append("rows_partial")
-
-    return ",".join(parts) if parts else "mismatch"
 
 
 def compare_dataframes_as_dataframe_safe(gt_df: pd.DataFrame, out_df: pd.DataFrame):
@@ -264,8 +221,66 @@ def compare_dataframes_as_dataframe_safe(gt_df: pd.DataFrame, out_df: pd.DataFra
     return pd.DataFrame(result_dict)
 
 
-def generate_final_report():
-    pass
+def _compute_metrics(statuses: Iterable[str], matches: Iterable[bool]) -> Dict[str, float]:
+    statuses = list(statuses)
+    matches = list(matches)
+    tp = sum(1 for s, m in zip(statuses, matches) if s == "exact_match" and m)
+    fp = sum(1 for s, m in zip(statuses, matches) if s != "exact_match" and m)
+    fn = sum(1 for s, m in zip(statuses, matches) if s == "exact_match" and not m)
+    tn = sum(1 for s, m in zip(statuses, matches) if s != "exact_match" and not m)
+    precision = tp / (tp + fp) if (tp + fp) else 0
+    recall = tp / (tp + fn) if (tp + fn) else 0
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0
+    accuracy = (tp + tn) / (tp + fp + fn + tn) if (tp + fp + fn + tn) else 0
+    return {
+        "accuracy": accuracy,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "tn": tn,
+    }
+
+
+def generate_final_report(model_dir: Path) -> None:
+    summary_files = sorted(model_dir.glob("*/summary.csv"))
+    final_rows = []
+    overall_statuses: List[str] = []
+    overall_matches: List[bool] = []
+
+    for s_file in summary_files:
+        df = pd.read_csv(s_file)
+        statuses = df["status"].tolist()
+        matches = df["match"].astype(bool).tolist()
+        metrics = _compute_metrics(statuses, matches)
+        final_rows.append(
+            {
+                "category": s_file.parent.name,
+                "total_cases": len(df),
+                "exact_match": statuses.count("exact_match"),
+                "match": sum(matches),
+                **{k: round(v, 3) for k, v in metrics.items()},
+            }
+        )
+        overall_statuses.extend(statuses)
+        overall_matches.extend(matches)
+
+    overall_metrics = _compute_metrics(overall_statuses, overall_matches)
+    final_rows.append(
+        {
+            "category": "OVERALL",
+            "total_cases": len(overall_statuses),
+            "exact_match": overall_statuses.count("exact_match"),
+            "match": sum(overall_matches),
+            **{k: round(v, 3) for k, v in overall_metrics.items()},
+        }
+    )
+
+    report_df = pd.DataFrame(final_rows)
+    report_path = model_dir / "final_report.csv"
+    report_df.to_csv(report_path, index=False)
 
 def run_test_case(
     vn: VannaBase,
@@ -273,12 +288,13 @@ def run_test_case(
     ground_sql: str,
     gt_df: pd.DataFrame,
     method: str,
-) -> Tuple[pd.DataFrame | None, str]:
-    """Execute a single test case and return the resulting dataframe and status."""
+) -> Tuple[pd.DataFrame | None, str, bool]:
+    """Execute a single test case and return the resulting dataframe,
+    a simple status string and whether the output matches the shape of the ground truth."""
 
     try:
         if prompt is None:
-            return None, "no_prompt"
+            return None, "no_prompt", False
         if method == "ask_agent":
             result = vn.ask_agent(question=prompt)
             if isinstance(result, tuple):
@@ -292,11 +308,19 @@ def run_test_case(
         else:
             _, df, _ = vn.ask(question=prompt, print_results=False, visualize=False)
     except Exception:
-        return None, "failed_run"
+        return None, "failed_run", False
     if df is None:
-        return None, "failed_run"
-    status = compare_frames(gt_df, df)
-    return df, status
+        return None, "failed_run", False
+    try:
+        status = "exact_match" if df.equals(gt_df) else "mismatch"
+    except Exception:
+        status = "mismatch"
+    match = False
+    try:
+        match = df.shape[0] == gt_df.shape[0] and df.shape[1] == gt_df.shape[1]
+    except Exception:
+        match = False
+    return df, status, match
 
 
 def main() -> None:
@@ -342,6 +366,7 @@ def main() -> None:
                 "case",
                 "prompt_type",
                 "status",
+                "match",
                 "sql_path",
                 "output_path",
                 "gt_rows", "out_rows", "gt_not_in_out", "out_not_in_gt", "common_rows",
@@ -374,7 +399,7 @@ def main() -> None:
                     test_count += 1
                     print(f"{args.model} | {category}-{idx} {p_type}")
                     
-                    df_out, status = run_test_case(
+                    df_out, status, match = run_test_case(
                         vn, p_text, sql_path.read_text(), gt_df, args.method
                     )
                     out_path = cat_dir / f"case{idx:02d}_{p_type}.csv"
@@ -389,7 +414,7 @@ def main() -> None:
                     comparison_values = comparison_result['Value'].tolist()
 
                     # Write the results in the summary CSV
-                    writer.writerow([idx, p_type, status, sql_path.name, out_path.name] + comparison_values)
+                    writer.writerow([idx, p_type, status, bool(match), sql_path.name, out_path.name] + comparison_values)
 
                     cat_total += 1
                     if status == "exact_match":
@@ -410,6 +435,8 @@ def main() -> None:
             total_c += tot
         overall = total_s / total_c if total_c else 0
         writer.writerow(["OVERALL", total_c, total_s, f"{overall:.3f}"])
+
+    generate_final_report(model_dir)
 
 
 if __name__ == "__main__":
