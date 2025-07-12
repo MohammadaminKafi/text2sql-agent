@@ -355,7 +355,6 @@ def main() -> None:
             total = len(all_tests)
 
             for idx, (sql_path, prompt_path, prompts) in enumerate(cases, start=0):
-                print(f"Testing on test case {category}-{idx}")
                 gt_path = cat_dir / f"case{idx:02d}_gt.csv"
                 if gt_path.exists():
                     gt_df = pd.read_csv(gt_path)

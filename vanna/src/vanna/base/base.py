@@ -48,8 +48,16 @@ flowchart
 
 """
 
-import json
+from no_commit_utils.credentials_utils import read_avalai_api_key,read_langsmith_api_key
+# Enviromental Variables
 import os
+os.environ["LANGSMITH_TRACING"] = "true"
+os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
+os.environ["LANGSMITH_API_KEY"] = read_langsmith_api_key()
+os.environ["LANGSMITH_PROJECT"] = "react-sql"
+
+import json
+# import os
 import re
 import sqlite3
 import traceback
@@ -1884,13 +1892,6 @@ class VannaBase(ABC):
         return sql, df, fig
 
     def ask_agent(self, question : str) -> Tuple[str, pd.DataFrame]:
-        from no_commit_utils.credentials_utils import read_avalai_api_key
-
-        
-
-        # os.environ["OPENAI_API_KEY"] = read_avalai_api_key()
-        # memory = MemorySaver()
-
         model = init_chat_model(
                         model="gpt-4o", 
                         model_provider="openai", 
@@ -1909,30 +1910,32 @@ class VannaBase(ABC):
             args_schema=QueryArgs
         )
 
+        self.create_new_thread(thread_type="react")
+
         tools = [query_tool]
-        agent_executer = create_react_agent(model, tools=tools)
+        agent = create_react_agent(model, tools=tools)
         
-        # input_message = {"role": "user", "content": question}
-
-        # doc_list = self.get_related_documentation(question)
-
-        # prompt = self.get_sql_prompt(
-        #     initial_prompt=None,
-        #     question=question,
-        #     question_sql_list=[],
-        #     ddl_list=[],
-        #     doc_list=doc_list,
-        # )
+        doc_list = self.get_related_documentation(question)
 
         prompt_content = (
             "You are a T-SQL / Microsoft SQL Server expert. Please help to generate a SQL query to answer the question. "
-            "You are provided with a tool for querying the AdventureWorks2022 database. The tool name is \"run_sql\". "
+            "You are provided with a tool for querying the AdventureWorks2022 database. The tool name is \"run_sql\".\n"
+            f"You are provided with the description of related tables retrieved from RAG:\n{'\n\n'.join(doc_list)}\n"
             f"The question is: {question}"
         )
 
         prompt = [{"role": "user", "content": prompt_content}]
 
-        response = agent_executer.invoke({"messages": prompt})
+        response = agent.invoke({"messages": prompt})
+
+        # response = agent.stream(
+        #     {"messages": prompt},
+        #     stream_mode="debug"
+        # )
+            
+        # i = 0
+        # for event in response:
+        #     print(f"\n\nEvent {i}: {event}")
 
         return response
 
@@ -2350,7 +2353,7 @@ class VannaBase(ABC):
         
     # ---------- Agent Helper Methods
     def agent_run_sql_query(self, query : str) -> str:
-        return self.run_sql(query).to_markdown()
+        return self.run_sql(self.extract_sql(query)).to_markdown()
         
 class QueryArgs(PydanticBaseModelForTool):
     query: str = Field(..., description="SQL query to be executed")
