@@ -114,49 +114,6 @@ def collect_tests(dataset_dir: Path) -> Dict[str, List[Tuple[Path, Path, Dict[st
     return tests
 
 
-def compare_frames(gt: pd.DataFrame, out: pd.DataFrame) -> str:
-    """Rough dataframe comparison returning a status string."""
-
-    try:
-        if out.equals(gt):
-            return "exact_match"
-    except Exception:
-        pass
-
-    gt_cols = list(gt.columns)
-    out_cols = list(out.columns)
-    parts: List[str] = []
-
-    if out_cols != gt_cols:
-        if set(out_cols) == set(gt_cols):
-            parts.append("wrong_order")
-        else:
-            if len(out_cols) > len(gt_cols):
-                parts.append("more_cols")
-            if len(out_cols) < len(gt_cols):
-                parts.append("less_cols")
-            if not set(out_cols).issubset(set(gt_cols)) and not set(gt_cols).issubset(
-                set(out_cols)
-            ):
-                parts.append("cols_partial")
-
-    if len(out) != len(gt):
-        if len(out) > len(gt):
-            parts.append("more_rows")
-        else:
-            parts.append("less_rows")
-
-    try:
-        merged = pd.merge(out, gt, how="inner")
-    except:
-        merged = pd.DataFrame()
-        
-    if merged.empty:
-        parts.append("rows_no_match")
-    elif len(merged) < min(len(gt), len(out)):
-        parts.append("rows_partial")
-
-    return ",".join(parts) if parts else "mismatch"
 
 
 def compare_dataframes_as_dataframe_safe(gt_df: pd.DataFrame, out_df: pd.DataFrame):
@@ -264,8 +221,57 @@ def compare_dataframes_as_dataframe_safe(gt_df: pd.DataFrame, out_df: pd.DataFra
     return pd.DataFrame(result_dict)
 
 
-def generate_final_report():
-    pass
+def generate_final_report(model_dir: Path) -> None:
+    """Create a final aggregate report with accuracy metrics."""
+
+    final_path = model_dir / "final_report.csv"
+    header = [
+        "category",
+        "cases",
+        "accuracy",
+        "precision",
+        "recall",
+        "f1",
+        "match_rate",
+        "exact_match_rate",
+    ]
+
+    all_frames = []
+    with open(final_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+
+        for cat_dir in sorted(p for p in model_dir.iterdir() if p.is_dir()):
+            summary_path = cat_dir / "summary.csv"
+            if not summary_path.exists():
+                continue
+            df = pd.read_csv(summary_path)
+            all_frames.append(df)
+            metrics = [
+                df["accuracy"].mean(),
+                df["precision"].mean(),
+                df["recall"].mean(),
+                df["f1"].mean(),
+                df["match"].mean(),
+                df["exact_match"].mean(),
+            ]
+            writer.writerow(
+                [cat_dir.name, len(df)] + [f"{m:.3f}" if m == m else "0.000" for m in metrics]
+            )
+
+        if all_frames:
+            df_all = pd.concat(all_frames, ignore_index=True)
+            metrics = [
+                df_all["accuracy"].mean(),
+                df_all["precision"].mean(),
+                df_all["recall"].mean(),
+                df_all["f1"].mean(),
+                df_all["match"].mean(),
+                df_all["exact_match"].mean(),
+            ]
+            writer.writerow(
+                ["OVERALL", len(df_all)] + [f"{m:.3f}" if m == m else "0.000" for m in metrics]
+            )
 
 def run_test_case(
     vn: VannaBase,
@@ -273,12 +279,12 @@ def run_test_case(
     ground_sql: str,
     gt_df: pd.DataFrame,
     method: str,
-) -> Tuple[pd.DataFrame | None, str]:
-    """Execute a single test case and return the resulting dataframe and status."""
+) -> pd.DataFrame | None:
+    """Execute a single test case and return the resulting dataframe."""
 
     try:
         if prompt is None:
-            return None, "no_prompt"
+            return None
         if method == "ask_agent":
             result = vn.ask_agent(question=prompt)
             if isinstance(result, tuple):
@@ -292,11 +298,10 @@ def run_test_case(
         else:
             _, df, _ = vn.ask(question=prompt, print_results=False, visualize=False)
     except Exception:
-        return None, "failed_run"
+        return None
     if df is None:
-        return None, "failed_run"
-    status = compare_frames(gt_df, df)
-    return df, status
+        return None
+    return df
 
 
 def main() -> None:
@@ -328,7 +333,6 @@ def main() -> None:
         print("\nVanna is connected to the LLM provider")
 
     test_count = 0
-    category_stats: Dict[str, Tuple[int, int]] = {}
 
 
     for category, cases in all_tests.items():
@@ -341,16 +345,15 @@ def main() -> None:
             writer.writerow([
                 "case",
                 "prompt_type",
-                "status",
                 "sql_path",
                 "output_path",
+                "match",
                 "gt_rows", "out_rows", "gt_not_in_out", "out_not_in_gt", "common_rows",
                 "gt_cols", "out_cols", "gt_not_in_out_cols", "out_not_in_gt_cols", "common_cols",
-                "exact_match", "gt_in_out", "out_in_gt", "ordered_same", "cols_type_match"
+                "exact_match", "gt_in_out", "out_in_gt", "ordered_same", "cols_type_match",
+                "accuracy", "precision", "recall", "f1"
             ])
 
-            cat_success = 0
-            cat_total = 0
             test_count = 0
             total = len(all_tests)
 
@@ -374,11 +377,11 @@ def main() -> None:
                     test_count += 1
                     print(f"{args.model} | {category}-{idx} {p_type}")
                     
-                    df_out, status = run_test_case(
+                    df_out = run_test_case(
                         vn, p_text, sql_path.read_text(), gt_df, args.method
                     )
                     out_path = cat_dir / f"case{idx:02d}_{p_type}.csv"
-                    
+
                     if df_out is not None:
                         df_out.to_csv(out_path, index=False)
 
@@ -388,28 +391,24 @@ def main() -> None:
                     # Flatten the comparison result to append it to the CSV row
                     comparison_values = comparison_result['Value'].tolist()
 
+                    metrics = dict(zip(comparison_result['Metric'], comparison_values))
+                    gt_rows = metrics.get('gt_rows') or 0
+                    out_rows = metrics.get('out_rows') or 0
+                    common_rows = metrics.get('common_rows') or 0
+                    precision = common_rows / out_rows if out_rows else 0
+                    recall = common_rows / gt_rows if gt_rows else 0
+                    accuracy = common_rows / max(gt_rows, out_rows) if max(gt_rows, out_rows) else 0
+                    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0
+
+                    match = bool(df_out is not None and gt_rows == out_rows and metrics.get('gt_cols') == metrics.get('out_cols'))
+
+                    comparison_values += [accuracy, precision, recall, f1]
+
                     # Write the results in the summary CSV
-                    writer.writerow([idx, p_type, status, sql_path.name, out_path.name] + comparison_values)
+                    writer.writerow([idx, p_type, sql_path.name, out_path.name, match] + comparison_values)
 
-                    cat_total += 1
-                    if status == "exact_match":
-                        cat_success += 1
 
-            category_stats[category] = (cat_success, cat_total)
-
-    agg_path = model_dir / "aggregate_summary.csv"
-    with open(agg_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["category", "total_cases", "exact_match", "accuracy"])
-        total_s = 0
-        total_c = 0
-        for cat, (succ, tot) in category_stats.items():
-            acc = succ / tot if tot else 0
-            writer.writerow([cat, tot, succ, f"{acc:.3f}"])
-            total_s += succ
-            total_c += tot
-        overall = total_s / total_c if total_c else 0
-        writer.writerow(["OVERALL", total_c, total_s, f"{overall:.3f}"])
+    generate_final_report(model_dir)
 
 
 if __name__ == "__main__":
