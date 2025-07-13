@@ -1,0 +1,6 @@
+{
+  "well-explained": "Find the vendor(s) who supply the maximum number of distinct products; output their vendor ID, number of products, and average lead time, ordered by lead time ascending.",
+  "poorly-explained": "Top vendor by product count.",
+  "underspecified": "Show vendor stats.",
+  "follow-up": "Identify the vendor supplying the most distinct products."
+}

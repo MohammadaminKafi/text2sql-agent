@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Show products where the quantity in inventory is above the average for that product, along with the minimum and maximum quantities across all locations for that product."
-
-Poorly-Explained Prompt
-"Get products with high inventory and their min/max quantities."
-
-Underspecified Prompt
-"Show product inventory."

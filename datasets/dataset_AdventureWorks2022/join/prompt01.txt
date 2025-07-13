@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"List the first and last names, job titles, and hire dates of employees who were hired before January 1st, 2015, and whose job title contains the word 'Manager'."
-
-Poorly-Explained Prompt
-"Show me who were managers before 2015."
-
-Underspecified Prompt
-"Give me employee names and job titles."

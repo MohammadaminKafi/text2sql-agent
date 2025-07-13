@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Find the vendor(s) who supply the maximum number of distinct products; output their vendor ID, number of products, and average lead time, ordered by lead time ascending."
-
-Poorly-Explained Prompt
-"Top vendor by product count."
-
-Underspecified Prompt
-"Show vendor stats."

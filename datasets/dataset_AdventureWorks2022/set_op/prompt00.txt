@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Return a list of products that either have a list price greater than 1000 or are colored red. Show the product ID and name for each."
-
-Poorly-Explained Prompt
-"Give me products that are expensive or red."
-
-Underspecified Prompt
-"List products."

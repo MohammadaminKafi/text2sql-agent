@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Retrieve employees whose pay history contains rates higher than 50, showing their ID, name, average rate, and maximum rate from their pay history."
-
-Poorly-Explained Prompt
-"Get employees with high pay rates and some salary stats."
-
-Underspecified Prompt
-"List employees."

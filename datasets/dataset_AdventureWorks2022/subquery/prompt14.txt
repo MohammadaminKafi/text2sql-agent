@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Show products with inventory quantities lower than average, along with the total quantity sold and the maximum quantity sold for each product."
-
-Poorly-Explained Prompt
-"Get products with low stock and sales details."
-
-Underspecified Prompt
-"Show inventory details."

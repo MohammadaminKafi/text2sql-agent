@@ -88,24 +88,11 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 def load_prompt(path: Path) -> Dict[str, str]:
-    """Return prompts from file."""
+    """Return prompts from JSON file."""
 
-    text = path.read_text().strip().splitlines()
-    sections: Dict[str, str] = {}
-    current = None
-    buffer: List[str] = []
-    for line in text:
-        line = line.strip()
-        if line.endswith("Prompt"):
-            if current:
-                sections[current] = "\n".join(buffer).strip().strip('"')
-            current = line.split()[0].lower()
-            buffer = []
-        else:
-            buffer.append(line)
-    if current:
-        sections[current] = "\n".join(buffer).strip().strip('"')
-    return sections
+    import json
+
+    return json.loads(path.read_text())
 
 def collect_tests(dataset_dir: Path) -> Dict[str, List[Tuple[Path, Path, Dict[str, str]]]]:
     """Collect pairs of query and prompt files grouped by category."""
@@ -114,7 +101,7 @@ def collect_tests(dataset_dir: Path) -> Dict[str, List[Tuple[Path, Path, Dict[st
     for category in sorted(p.name for p in dataset_dir.iterdir() if p.is_dir()):
         cat_dir = dataset_dir / category
         queries = sorted(cat_dir.glob("query*.sql"))
-        prompts = sorted(cat_dir.glob("prompt*.txt"))
+        prompts = sorted(cat_dir.glob("prompt*.json"))
         cases: List[Tuple[Path, Path, Dict[str, str]]] = []
         for q, pth in zip(queries, prompts):
             cases.append((q, pth, load_prompt(pth)))

@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Return the ID and name of products that have never been ordered."
-
-Poorly-Explained Prompt
-"Products that never sold."
-
-Underspecified Prompt
-"Give me product list."

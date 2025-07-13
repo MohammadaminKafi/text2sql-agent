@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"List vendors who have never had a purchase order with a total amount greater than 1000, showing their ID and name."
-
-Poorly-Explained Prompt
-"Get vendors who didn’t make big sales."
-
-Underspecified Prompt
-"Show vendor list."

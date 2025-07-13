@@ -1,0 +1,6 @@
+{
+  "well-explained": "Find customers who have placed orders after January 1, 2011, and return their ID and store name.",
+  "poorly-explained": "Get customers with recent orders.",
+  "underspecified": "Show customer information.",
+  "follow-up": "Filter for customers with orders after 2011-01-01."
+}

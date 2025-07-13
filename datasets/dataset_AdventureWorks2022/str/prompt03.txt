@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Classify each product by name: label it 'Mountain' if it contains 'mountain', 'Bike' if it contains 'bike', otherwise 'Other'; also find the position of the first space, returning ProductID, Name, ProductType, FirstSpacePos, sorted by type and name."
-
-Poorly-Explained Prompt
-"Tag products containing mountain or bike and note where spaces are."
-
-Underspecified Prompt
-"Show product type and space position."

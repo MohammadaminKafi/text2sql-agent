@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Find each customer's ID and full name along with the total amount they've spent across all orders, using the Customer, Person, and SalesOrderHeader tables."
-
-Poorly-Explained Prompt
-"Show customer spending."
-
-Underspecified Prompt
-"List customers and how much they spent."

@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Compute the number of shipped orders, total revenue, and average freight per order for each year, using only orders with Status = 5."
-
-Poorly-Explained Prompt
-"Show yearly shipped order numbers with revenue and freight average."
-
-Underspecified Prompt
-"Give yearly order stats."

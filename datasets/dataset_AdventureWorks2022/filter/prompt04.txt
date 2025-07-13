@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Find products that have no inventory recorded (i.e., where the inventory quantity is NULL). Return the product ID and name."
-
-Poorly-Explained Prompt
-"Show products with no inventory."
-
-Underspecified Prompt
-"List products."

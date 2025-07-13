@@ -1,0 +1,6 @@
+{
+  "well-explained": "List customers who have spent more than $5,000 total, showing their ID, count of orders, and total amount spent, sorted by spending descending.",
+  "poorly-explained": "Find big spenders.",
+  "underspecified": "Show customer spending.",
+  "follow-up": "Focus on customers who spent more than usual."
+}

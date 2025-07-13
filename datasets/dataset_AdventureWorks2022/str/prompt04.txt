@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Split each valid email address into lowercase username and uppercase domain parts, also compute total length, and return BusinessEntityID, Username, Domain, EmailLength ordered by length descending."
-
-Poorly-Explained Prompt
-"Break emails into username/domain and length."
-
-Underspecified Prompt
-"Show split email info."

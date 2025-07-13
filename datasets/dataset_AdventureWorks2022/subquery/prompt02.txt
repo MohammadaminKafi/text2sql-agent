@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Find customers who have placed more orders than the average customer and show their ID plus the number of orders."
-
-Poorly-Explained Prompt
-"Show me customers with lots of orders."
-
-Underspecified Prompt
-"List customers."

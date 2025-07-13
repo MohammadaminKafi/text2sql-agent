@@ -1,0 +1,6 @@
+{
+  "well-explained": "Split each valid email address into lowercase username and uppercase domain parts, also compute total length, and return BusinessEntityID, Username, Domain, EmailLength ordered by length descending.",
+  "poorly-explained": "Break emails into username/domain and length.",
+  "underspecified": "Show split email info.",
+  "follow-up": "Return lowercase usernames, uppercase domains and email length."
+}
