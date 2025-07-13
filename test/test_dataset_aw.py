@@ -21,6 +21,13 @@ from datetime import datetime
 import csv
 import pandas as pd
 
+from test_utils.dataset_utils import collect_tests, verify_dataset
+from test_utils.eval_utils import (
+    compare_dataframes_as_dataframe_safe,
+    generate_final_report,
+    generate_language_summary,
+)
+
 from openai import OpenAI
 from vanna.src.vanna.base.base import VannaBase
 from vanna.src.vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
@@ -86,185 +93,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--level", type=int, default=1,
                         help="Number of prompt variants to evaluate")
     parser.add_argument(
-        "--language",
-        choices=["en", "fa"],
-        default="en",
-        help="Language of the prompt files (en or fa)",
+        "--languages",
+        nargs="+",
+        default=["en"],
+        help=(
+            "Languages of the prompt files. Additional prompts must follow the "
+            "<lang>_promptXX.json naming convention."
+        ),
     )
     return parser.parse_args()
 
-def load_prompt(path: Path) -> Dict[str, str]:
-    """Return prompts from JSON file."""
-
-    import json
-
-    return json.loads(path.read_text())
-
-def collect_tests(
-    dataset_dir: Path, language: str = "en"
-) -> Dict[str, List[Tuple[Path, Path, Dict[str, str]]]]:
-    """Collect pairs of query and prompt files grouped by category."""
-
-    tests: Dict[str, List[Tuple[Path, Path, Dict[str, str]]]] = {}
-    for category in sorted(p.name for p in dataset_dir.iterdir() if p.is_dir()):
-        cat_dir = dataset_dir / category
-        queries = sorted(cat_dir.glob("query*.sql"))
-        pattern = "prompt*.json" if language == "en" else "persian_prompt*.json"
-        prompts = sorted(cat_dir.glob(pattern))
-        cases: List[Tuple[Path, Path, Dict[str, str]]] = []
-        for q, pth in zip(queries, prompts):
-            cases.append((q, pth, load_prompt(pth)))
-        tests[category] = cases
-    return tests
-
-def compare_dataframes_as_dataframe_safe(gt_df: pd.DataFrame, out_df: pd.DataFrame):
-    result_dict = {
-        'Metric': [
-            'gt_rows', 'out_rows', 'gt_not_in_out', 'out_not_in_gt', 'common_rows',
-            'gt_cols', 'out_cols', 'gt_not_in_out_cols', 'out_not_in_gt_cols', 'common_cols',
-            'exact_match', 'gt_in_out', 'out_in_gt', 'ordered_same', 'cols_type_match'
-        ],
-        'Value': []
-    }
-    
-    # Safe calculation for each field with try-except blocks
-    try:
-        gt_rows = len(gt_df)
-    except Exception:
-        gt_rows = None
-    result_dict['Value'].append(gt_rows)
-
-    try:
-        out_rows = len(out_df)
-    except Exception:
-        out_rows = None
-    result_dict['Value'].append(out_rows)
-
-    try:
-        gt_not_in_out = len(pd.merge(gt_df, out_df, how='left', indicator=True).query('_merge == "left_only"'))
-    except Exception:
-        gt_not_in_out = None
-    result_dict['Value'].append(gt_not_in_out)
-
-    try:
-        out_not_in_gt = len(pd.merge(out_df, gt_df, how='left', indicator=True).query('_merge == "left_only"'))
-    except Exception:
-        out_not_in_gt = None
-    result_dict['Value'].append(out_not_in_gt)
-
-    try:
-        common_rows = len(pd.merge(gt_df, out_df, how='inner'))
-    except Exception:
-        common_rows = None
-    result_dict['Value'].append(common_rows)
-
-    try:
-        gt_cols = len(gt_df.columns)
-    except Exception:
-        gt_cols = None
-    result_dict['Value'].append(gt_cols)
-
-    try:
-        out_cols = len(out_df.columns)
-    except Exception:
-        out_cols = None
-    result_dict['Value'].append(out_cols)
-
-    try:
-        gt_not_in_out_cols = len(set(gt_df.columns) - set(out_df.columns))
-    except Exception:
-        gt_not_in_out_cols = None
-    result_dict['Value'].append(gt_not_in_out_cols)
-
-    try:
-        out_not_in_gt_cols = len(set(out_df.columns) - set(gt_df.columns))
-    except Exception:
-        out_not_in_gt_cols = None
-    result_dict['Value'].append(out_not_in_gt_cols)
-
-    try:
-        common_cols = len(set(gt_df.columns) & set(out_df.columns))
-    except Exception:
-        common_cols = None
-    result_dict['Value'].append(common_cols)
-
-    try:
-        exact_match = gt_df.equals(out_df)
-    except Exception:
-        exact_match = None
-    result_dict['Value'].append(exact_match)
-
-    try:
-        gt_in_out = gt_df.shape[0] <= out_df.shape[0] and gt_df.columns.isin(out_df.columns).all() and gt_df.equals(out_df.iloc[:gt_df.shape[0], :])
-    except Exception:
-        gt_in_out = None
-    result_dict['Value'].append(gt_in_out)
-
-    try:
-        out_in_gt = out_df.shape[0] <= gt_df.shape[0] and out_df.columns.isin(gt_df.columns).all() and out_df.equals(gt_df.iloc[:out_df.shape[0], :])
-    except Exception:
-        out_in_gt = None
-    result_dict['Value'].append(out_in_gt)
-
-    try:
-        ordered_same = gt_df.equals(out_df)  # checks both values and order
-    except Exception:
-        ordered_same = None
-    result_dict['Value'].append(ordered_same)
-
-    try:
-        cols_type_match = (gt_df.dtypes == out_df.dtypes).all()
-    except Exception:
-        cols_type_match = None
-    result_dict['Value'].append(cols_type_match)
-
-    # Return the result as a DataFrame
-    return pd.DataFrame(result_dict)
-
-def generate_final_report(model_dir: Path) -> None:
-    """Create a final aggregate report with dataset metrics."""
-
-    final_path = model_dir / "final_report.csv"
-    header = [
-        "category",
-        "cases",
-        "jaccard",
-        "row_match_rate",
-        "match_rate",
-        "exact_match_rate",
-    ]
-    all_frames = []
-    with open(final_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
-
-        for cat_dir in sorted(p for p in model_dir.iterdir() if p.is_dir()):
-            summary_path = cat_dir / "summary.csv"
-            if not summary_path.exists():
-                continue
-            df = pd.read_csv(summary_path)
-            all_frames.append(df)
-            metrics = [
-                df["jaccard"].mean(),
-                df["row_match"].mean(),
-                df["match"].mean(),
-                df["exact_match"].mean(),
-            ]
-            writer.writerow(
-                [cat_dir.name, len(df)] + [f"{m:.3f}" if m == m else "0.000" for m in metrics]
-            )
-
-        if all_frames:
-            df_all = pd.concat(all_frames, ignore_index=True)
-            metrics = [
-                df_all["jaccard"].mean(),
-                df_all["row_match"].mean(),
-                df_all["match"].mean(),
-                df_all["exact_match"].mean(),
-            ]
-            writer.writerow(
-                ["OVERALL", len(df_all)] + [f"{m:.3f}" if m == m else "0.000" for m in metrics]
-            )
 
 def run_test_case(
     vn: VannaBase,
@@ -272,29 +110,34 @@ def run_test_case(
     ground_sql: str,
     gt_df: pd.DataFrame,
     method: str,
-) -> pd.DataFrame | None:
-    """Execute a single test case and return the resulting dataframe."""
+) -> Tuple[pd.DataFrame | None, str, float, str]:
+    """Execute a single test case and return dataframe, generated SQL, duration, and error."""
 
+    start = time.time()
+    generated_sql = ""
+    error = ""
+    df: pd.DataFrame | None = None
     try:
         if prompt is None:
-            return None
+            raise ValueError("Prompt is None")
         if method == "ask_agent":
             result = vn.ask_agent(question=prompt)
             if isinstance(result, tuple):
+                if len(result) > 0 and isinstance(result[0], str):
+                    generated_sql = result[0]
                 df = result[1] if len(result) > 1 else None
             elif isinstance(result, pd.DataFrame):
                 df = result
             elif isinstance(result, str):
+                generated_sql = result
                 df = vn.run_sql(result)
-            else:
-                df = None
         else:
-            _, df, _ = vn.ask(question=prompt, print_results=False, visualize=False)
-    except Exception:
-        return None
-    if df is None:
-        return None
-    return df
+            generated_sql, df, _ = vn.ask(question=prompt, print_results=False, visualize=False)
+    except Exception as e:
+        error = str(e)
+        df = None
+    duration = time.time() - start
+    return df, generated_sql, duration, error
 
 
 def main() -> None:
@@ -309,9 +152,7 @@ def main() -> None:
     log_dir.mkdir(exist_ok=True)
 
     openai_cfg = {"api_key": API_KEY}
-    all_tests = collect_tests(dataset_dir, language=args.language)
-    total = sum(len(v) for v in all_tests.values())
-    print(f"\nNumber of tests: {total}")
+    verify_dataset(dataset_dir, args.languages)
 
     vn = MyVanna(openai_config=openai_cfg, llm_config={"model": args.model})
     vn.connect_to_mssql(odbc_conn_str=args.conn_str)
@@ -325,81 +166,101 @@ def main() -> None:
     if vn.test_llm_connection():
         print("\nVanna is connected to the LLM provider")
 
-    test_count = 0
+    for language in args.languages:
+        print(f"\nRunning language: {language}")
+        all_tests = collect_tests(dataset_dir, language=language)
+        total = sum(len(v) for v in all_tests.values())
+        print(f"Number of tests: {total}")
+        lang_dir = model_dir / language
+        lang_dir.mkdir(exist_ok=True)
 
+        for category, cases in all_tests.items():
+            cat_dir = lang_dir / category
+            cat_dir.mkdir(exist_ok=True)
+            summary_path = cat_dir / "summary.csv"
 
-    for category, cases in all_tests.items():
-        cat_dir = model_dir / category
-        cat_dir.mkdir(exist_ok=True)
-        summary_path = cat_dir / "summary.csv"
-        
-        with open(summary_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                "case",
-                "prompt_type",
-                "sql_path",
-                "output_path",
-                "match",
-                "row_match",
-                "gt_rows", "out_rows", "gt_not_in_out", "out_not_in_gt", "common_rows",
-                "gt_cols", "out_cols", "gt_not_in_out_cols", "out_not_in_gt_cols", "common_cols",
-                "exact_match", "gt_in_out", "out_in_gt", "ordered_same", "cols_type_match",
-                "jaccard"
-            ])
+            with open(summary_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow([
+                    "case",
+                    "prompt_type",
+                    "sql_path",
+                    "output_path",
+                    "duration_sec",
+                    "generated_sql",
+                    "prompt_file",
+                    "error",
+                    "match",
+                    "row_match",
+                    "gt_rows", "out_rows", "gt_not_in_out", "out_not_in_gt", "common_rows",
+                    "gt_cols", "out_cols", "gt_not_in_out_cols", "out_not_in_gt_cols", "common_cols",
+                    "exact_match", "gt_in_out", "out_in_gt", "ordered_same", "cols_type_match",
+                    "jaccard"
+                ])
 
-            test_count = 0
-            total = len(all_tests)
+                for idx, (sql_path, prompt_path, prompts) in enumerate(cases, start=0):
+                    gt_path = cat_dir / f"case{idx:02d}_gt.csv"
+                    if gt_path.exists():
+                        gt_df = pd.read_csv(gt_path)
+                    else:
+                        gt_df = vn.run_sql(sql_path.read_text())
+                        gt_df.to_csv(gt_path, index=False)
 
-            for idx, (sql_path, prompt_path, prompts) in enumerate(cases, start=0):
-                gt_path = cat_dir / f"case{idx:02d}_gt.csv"
-                if gt_path.exists():
-                    gt_df = pd.read_csv(gt_path)
-                else:
-                    gt_df = vn.run_sql(sql_path.read_text())
-                    gt_df.to_csv(gt_path, index=False)
+                    prompt_order = [
+                        ("well", prompts.get("well-explained")),
+                        ("poor", prompts.get("poorly-explained")),
+                        ("under", prompts.get("underspecified")),
+                    ]
+                    prompt_order = [p for p in prompt_order if p[1] is not None]
+                    prompt_order = prompt_order[:args.level]
 
-                prompt_order = [
-                    ("well", prompts.get("well-explained")),
-                    ("poor", prompts.get("poorly-explained")),
-                    ("under", prompts.get("underspecified")),
-                ]
-                prompt_order = [p for p in prompt_order if p[1] is not None]
-                prompt_order = prompt_order[:args.level]
+                    for p_type, p_text in prompt_order:
+                        print(f"{args.model} | {language} | {category}-{idx} {p_type}")
 
-                for p_type, p_text in prompt_order:
-                    test_count += 1
-                    print(f"{args.model} | {category}-{idx} {p_type}")
-                    
-                    df_out = run_test_case(
-                        vn, p_text, sql_path.read_text(), gt_df, args.method
-                    )
-                    out_path = cat_dir / f"case{idx:02d}_{p_type}.csv"
+                        df_out, gen_sql, duration, error = run_test_case(
+                            vn, p_text, sql_path.read_text(), gt_df, args.method
+                        )
+                        out_path = cat_dir / f"case{idx:02d}_{p_type}.csv"
+                        gen_sql_path = cat_dir / f"case{idx:02d}_{p_type}_gen.sql"
+                        prompt_txt_path = cat_dir / f"case{idx:02d}_{p_type}_prompt.txt"
 
-                    if df_out is not None:
-                        df_out.to_csv(out_path, index=False)
+                        if df_out is not None:
+                            df_out.to_csv(out_path, index=False)
 
-                    # Compare the dataframes and aggregate the result
-                    comparison_result = compare_dataframes_as_dataframe_safe(gt_df, df_out)
+                        gen_sql_path.write_text(gen_sql or "")
+                        prompt_txt_path.write_text(p_text or "")
 
-                    # Flatten the comparison result to append it to the CSV row
-                    comparison_values = comparison_result['Value'].tolist()
+                        comparison_result = compare_dataframes_as_dataframe_safe(gt_df, df_out)
 
-                    metrics = dict(zip(comparison_result['Metric'], comparison_values))
-                    gt_rows = metrics.get('gt_rows') or 0
-                    out_rows = metrics.get('out_rows') or 0
-                    common_rows = metrics.get('common_rows') or 0
+                        comparison_values = comparison_result['Value'].tolist()
 
-                    row_match = gt_rows == out_rows
-                    union_rows = gt_rows + out_rows - common_rows
-                    jaccard = common_rows / union_rows if union_rows else 0
-                    match = bool(df_out is not None and row_match and metrics.get("gt_cols") == metrics.get("out_cols"))
-                    comparison_values.append(jaccard)
-                    # Write the results in the summary CSV
-                    writer.writerow([idx, p_type, sql_path.name, out_path.name, match, row_match] + comparison_values)
+                        metrics = dict(zip(comparison_result['Metric'], comparison_values))
+                        gt_rows = metrics.get('gt_rows') or 0
+                        out_rows = metrics.get('out_rows') or 0
+                        common_rows = metrics.get('common_rows') or 0
 
+                        row_match = gt_rows == out_rows
+                        union_rows = gt_rows + out_rows - common_rows
+                        jaccard = common_rows / union_rows if union_rows else 0
+                        match = bool(df_out is not None and row_match and metrics.get("gt_cols") == metrics.get("out_cols"))
+                        comparison_values.append(jaccard)
 
-    generate_final_report(model_dir)
+                        writer.writerow([
+                            idx,
+                            p_type,
+                            sql_path.name,
+                            out_path.name,
+                            f"{duration:.2f}",
+                            gen_sql_path.name,
+                            prompt_txt_path.name,
+                            error,
+                            match,
+                            row_match,
+                        ] + comparison_values)
+
+        generate_final_report(lang_dir)
+
+    generate_language_summary(model_dir, args.languages)
 
 if __name__ == "__main__":
     main()
