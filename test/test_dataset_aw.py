@@ -222,20 +222,17 @@ def compare_dataframes_as_dataframe_safe(gt_df: pd.DataFrame, out_df: pd.DataFra
     return pd.DataFrame(result_dict)
 
 def generate_final_report(model_dir: Path) -> None:
-    """Create a final aggregate report with accuracy metrics."""
+    """Create a final aggregate report with dataset metrics."""
 
     final_path = model_dir / "final_report.csv"
     header = [
         "category",
         "cases",
-        "accuracy",
-        "precision",
-        "recall",
-        "f1",
+        "jaccard",
+        "row_match_rate",
         "match_rate",
         "exact_match_rate",
     ]
-
     all_frames = []
     with open(final_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -248,10 +245,8 @@ def generate_final_report(model_dir: Path) -> None:
             df = pd.read_csv(summary_path)
             all_frames.append(df)
             metrics = [
-                df["accuracy"].mean(),
-                df["precision"].mean(),
-                df["recall"].mean(),
-                df["f1"].mean(),
+                df["jaccard"].mean(),
+                df["row_match"].mean(),
                 df["match"].mean(),
                 df["exact_match"].mean(),
             ]
@@ -262,10 +257,8 @@ def generate_final_report(model_dir: Path) -> None:
         if all_frames:
             df_all = pd.concat(all_frames, ignore_index=True)
             metrics = [
-                df_all["accuracy"].mean(),
-                df_all["precision"].mean(),
-                df_all["recall"].mean(),
-                df_all["f1"].mean(),
+                df_all["jaccard"].mean(),
+                df_all["row_match"].mean(),
                 df_all["match"].mean(),
                 df_all["exact_match"].mean(),
             ]
@@ -348,10 +341,11 @@ def main() -> None:
                 "sql_path",
                 "output_path",
                 "match",
+                "row_match",
                 "gt_rows", "out_rows", "gt_not_in_out", "out_not_in_gt", "common_rows",
                 "gt_cols", "out_cols", "gt_not_in_out_cols", "out_not_in_gt_cols", "common_cols",
                 "exact_match", "gt_in_out", "out_in_gt", "ordered_same", "cols_type_match",
-                "accuracy", "precision", "recall", "f1"
+                "jaccard"
             ])
 
             test_count = 0
@@ -395,17 +389,14 @@ def main() -> None:
                     gt_rows = metrics.get('gt_rows') or 0
                     out_rows = metrics.get('out_rows') or 0
                     common_rows = metrics.get('common_rows') or 0
-                    precision = common_rows / out_rows if out_rows else 0
-                    recall = common_rows / gt_rows if gt_rows else 0
-                    accuracy = common_rows / max(gt_rows, out_rows) if max(gt_rows, out_rows) else 0
-                    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0
 
-                    match = bool(df_out is not None and gt_rows == out_rows and metrics.get('gt_cols') == metrics.get('out_cols'))
-
-                    comparison_values += [accuracy, precision, recall, f1]
-
+                    row_match = gt_rows == out_rows
+                    union_rows = gt_rows + out_rows - common_rows
+                    jaccard = common_rows / union_rows if union_rows else 0
+                    match = bool(df_out is not None and row_match and metrics.get("gt_cols") == metrics.get("out_cols"))
+                    comparison_values.append(jaccard)
                     # Write the results in the summary CSV
-                    writer.writerow([idx, p_type, sql_path.name, out_path.name, match] + comparison_values)
+                    writer.writerow([idx, p_type, sql_path.name, out_path.name, match, row_match] + comparison_values)
 
 
     generate_final_report(model_dir)
