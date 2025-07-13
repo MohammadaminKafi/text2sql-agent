@@ -48,13 +48,14 @@ flowchart
 
 """
 
-from no_commit_utils.credentials_utils import read_avalai_api_key,read_langsmith_api_key
+from no_commit_utils.credentials_utils import read_avalai_api_key, read_langsmith_api_key, read_metis_api_key
+
 # Enviromental Variables
 import os
-os.environ["LANGSMITH_TRACING"] = "true"
-os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
-os.environ["LANGSMITH_API_KEY"] = read_langsmith_api_key()
-os.environ["LANGSMITH_PROJECT"] = "react-sql"
+# os.environ["LANGSMITH_TRACING"] = "true"
+# os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
+# os.environ["LANGSMITH_API_KEY"] = read_langsmith_api_key()
+# os.environ["LANGSMITH_PROJECT"] = "react-sql"
 
 import json
 # import os
@@ -74,7 +75,6 @@ import requests
 import sqlparse
 
 # Agent imports
-import dspy
 from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
@@ -93,16 +93,24 @@ class VannaBase(ABC):
             config = {}
 
         self.config = config
+
+        # DBMS
         self.run_sql_is_set = False
         self.static_documentation = ""
         self.dialect = self.config.get("dialect", "SQL")
         self.language = self.config.get("language", None)
         self.max_tokens = self.config.get("max_tokens", 14000)
+
+        # Log
         self.current_thread_name = None
         self.current_log_id = None
         self.save_log = self.config.get("save_log", True)
         self.verbose = self.config.get("verbose", False)
         self.log_dir = self.config.get("log_dir", "log")
+
+        # Agent
+        self.agent = None
+        self.max_iters = 20
 
     # ---------- Test Methods
     def test_llm_connection(self):
@@ -1892,28 +1900,10 @@ class VannaBase(ABC):
         return sql, df, fig
 
     def ask_agent(self, question : str) -> Tuple[str, pd.DataFrame]:
-        model = init_chat_model(
-                        model="gpt-4o", 
-                        model_provider="openai", 
-                        openai_api_base="https://api.avalapis.ir/v1",
-                        openai_api_key = read_avalai_api_key()
-                        )
-        
-        query_tool = StructuredTool.from_function(
-            func=self.agent_run_sql_query,
-            name="run_sql",
-            description = (
-                        "Execute a raw SQL query against the connected database and return the result "
-                        "as a Pandas DataFrame formatted in Markdown. Useful for reading, analyzing, "
-                        "or summarizing tabular data. The input should be a valid SQL query string. "
-                    ),
-            args_schema=QueryArgs
-        )
-
         self.create_new_thread(thread_type="react")
 
-        tools = [query_tool]
-        agent = create_react_agent(model, tools=tools)
+        if self.agent == None:
+            self.create_agent()
         
         doc_list = self.get_related_documentation(question)
 
@@ -1926,16 +1916,7 @@ class VannaBase(ABC):
 
         prompt = [{"role": "user", "content": prompt_content}]
 
-        response = agent.invoke({"messages": prompt})
-
-        # response = agent.stream(
-        #     {"messages": prompt},
-        #     stream_mode="debug"
-        # )
-            
-        # i = 0
-        # for event in response:
-        #     print(f"\n\nEvent {i}: {event}")
+        response = self.agent.invoke({"messages": prompt})
 
         return response
 
@@ -2352,8 +2333,80 @@ class VannaBase(ABC):
             return ""
         
     # ---------- Agent Helper Methods
+    def create_agent(
+            self,
+            model = "gpt-4o-mini", 
+            model_provider = "openai",
+            api_base = "https://api.metisai.ir/openai/v1",
+            api_key = read_metis_api_key(),
+            agent_toolkit: list = ["run_sql"],
+    ):
+        
+        chat_model = init_chat_model(
+            model=model, 
+            model_provider=model_provider, 
+            openai_api_base=api_base,
+            openai_api_key=api_key,
+        )
+
+        toolkit = []
+        if "run_sql" in agent_toolkit:
+            query_tool = StructuredTool.from_function(
+                func=self.agent_run_sql_query,
+                name="run_sql",
+                description = (
+                            "Execute a raw SQL query against the connected database and return the result "
+                            "as a Pandas DataFrame formatted in Markdown. Useful for reading, analyzing, "
+                            "or summarizing tabular data. The input should be a valid SQL query string. "
+                        ),
+                args_schema=QueryArgs
+            )
+            toolkit.append(query_tool)
+        if "ask_user" in agent_toolkit:
+            clarify_tool = StructuredTool.from_function(
+                func=self.agent_ask_user_clarification,
+                name="ask_user",
+                description = (
+                    "Asks user for more clarification and returns the user's response. "
+                    "Should be used as natural language"
+                ),
+                args_schema=AskUserArgs
+            )
+
+        self.agent = create_react_agent(model=chat_model, tools=toolkit)
+
+        self.log(
+            message=f"Agent initialized with {model} model and {model_provider} provider with {toolkit} as its toolkit"
+            title="Agent Initialization"
+        )
+        return
+
     def agent_run_sql_query(self, query : str) -> str:
         return self.run_sql(self.extract_sql(query)).to_markdown()
-        
+    
+    def agent_ask_user_clarification(self, question : str) -> str:
+        prebuilt_responses = {
+            0: "I don't know",
+            1: "Yes",
+            2: "No",
+            3: "Doesn't matter"
+        }
+        user_response = input(f"Agent has asked you for more clarification: {question}\n0 -> I don't know, 1 -> Yes, 2 -> No, 3 -> Doesn't matter\n")
+        if user_response == "0":
+            return prebuilt_responses[0]
+        if user_response == "1":
+            return prebuilt_responses[1]
+        if user_response == "2":
+            return prebuilt_responses[2]
+        if user_response == "3":
+            return prebuilt_responses[3]
+        if user_response == None or user_response == "":
+            return "User did not respond"
+        return user_response
+
+
 class QueryArgs(PydanticBaseModelForTool):
     query: str = Field(..., description="SQL query to be executed")
+
+class AskUserArgs(PydanticBaseModelForTool):
+    question: str = Field(..., description="Question to ask user for more clarification")

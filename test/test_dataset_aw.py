@@ -8,27 +8,35 @@ SQL, and intermediate data are stored in the ``logs`` directory.
 
 from __future__ import annotations
 
-import csv
 import os
 import sys
-import time
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
+import time
 from typing import Callable, Dict, Iterable, List, Tuple
 import argparse
 from datetime import datetime
-
+import csv
 import pandas as pd
-from openai import OpenAI
 
+from openai import OpenAI
 from vanna.src.vanna.base.base import VannaBase
 from vanna.src.vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
 from vanna.src.vanna.openai.openai_chat import OpenAI_Chat
 
 try:
-    from no_commit_utils.credentials_utils import read_avalai_api_key
-except Exception:  # pragma: no cover - optional dependency
+    from no_commit_utils.credentials_utils import read_avalai_api_key, read_metis_api_key
+except Exception:
     def read_avalai_api_key() -> str:
         return os.environ.get("OPENAI_API_KEY", "")
+    def read_metis_api_key() -> str:
+        return os.environ.get("OPENAI_API_KEY", "")
+
+API_KEY = read_metis_api_key()
+API_BASE_URL = "https://api.metisai.ir/openai/v1"
+DEFAULT_MODEL = "gpt-4o-mini"
 
 
 class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
@@ -42,15 +50,15 @@ class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
     ) -> None:
         client = OpenAI(
             api_key=openai_config["api_key"],
-            base_url=openai_config.get("base_url", "https://api.avalapis.ir/v1"),
+            base_url=openai_config.get("base_url", API_BASE_URL),
         )
         ChromaDB_VectorStore.__init__(self, config=vdb_config or {})
         OpenAI_Chat.__init__(self, config=llm_config or {}, client=client)
 
 
-DATASET_DIR = Path(__file__).resolve().parent / "datasets" / "dataset_AdventureWorks2022"
-LOG_DIR = Path(__file__).resolve().parent / "log" / "dataset_test"
-LOG_DIR.mkdir(exist_ok=True)
+DATASET_DIR = Path(__file__).resolve().parent.parent / "datasets" / "dataset_AdventureWorks2022"
+LOG_DIR = Path(__file__).resolve().parent / "log"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Default connection string
 CONN_STR = (
@@ -61,6 +69,8 @@ CONN_STR = (
 )
 
 
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run dataset tests")
     parser.add_argument("--dataset-dir", type=Path, default=DATASET_DIR,
@@ -69,14 +79,13 @@ def parse_args() -> argparse.Namespace:
                         help="Directory to write logs")
     parser.add_argument("--conn-str", default=CONN_STR,
                         help="ODBC connection string for ground truth queries")
-    parser.add_argument("--model", default="gpt-4o",
+    parser.add_argument("--model", default=DEFAULT_MODEL,
                         help="Model name to evaluate")
     parser.add_argument("--method", choices=["ask", "ask_agent"], default="ask",
                         help="Vanna method to invoke")
     parser.add_argument("--level", type=int, default=1,
                         help="Number of prompt variants to evaluate")
     return parser.parse_args()
-
 
 def load_prompt(path: Path) -> Dict[str, str]:
     """Return prompts from file."""
@@ -98,7 +107,6 @@ def load_prompt(path: Path) -> Dict[str, str]:
         sections[current] = "\n".join(buffer).strip().strip('"')
     return sections
 
-
 def collect_tests(dataset_dir: Path) -> Dict[str, List[Tuple[Path, Path, Dict[str, str]]]]:
     """Collect pairs of query and prompt files grouped by category."""
 
@@ -112,9 +120,6 @@ def collect_tests(dataset_dir: Path) -> Dict[str, List[Tuple[Path, Path, Dict[st
             cases.append((q, pth, load_prompt(pth)))
         tests[category] = cases
     return tests
-
-
-
 
 def compare_dataframes_as_dataframe_safe(gt_df: pd.DataFrame, out_df: pd.DataFrame):
     result_dict = {
@@ -220,7 +225,6 @@ def compare_dataframes_as_dataframe_safe(gt_df: pd.DataFrame, out_df: pd.DataFra
     # Return the result as a DataFrame
     return pd.DataFrame(result_dict)
 
-
 def generate_final_report(model_dir: Path) -> None:
     """Create a final aggregate report with accuracy metrics."""
 
@@ -315,7 +319,7 @@ def main() -> None:
     log_dir = args.log_dir
     log_dir.mkdir(exist_ok=True)
 
-    openai_cfg = {"api_key": read_avalai_api_key()}
+    openai_cfg = {"api_key": API_KEY}
     all_tests = collect_tests(dataset_dir)
     total = sum(len(v) for v in all_tests.values())
     print(f"\nNumber of tests: {total}")
@@ -409,7 +413,6 @@ def main() -> None:
 
 
     generate_final_report(model_dir)
-
 
 if __name__ == "__main__":
     main()
