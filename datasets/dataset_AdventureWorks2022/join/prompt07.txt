@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"List current employees (those without an EndDate) with their IDs, names, and department, using EmployeeDepartmentHistory, Department, Employee, and Person."
-
-Poorly-Explained Prompt
-"Who works where now?"
-
-Underspecified Prompt
-"Show employee departments."

@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Identify vendors supplying at least 3 products; show vendor ID, number of products, total and average lead time, ordered by average lead time."
-
-Poorly-Explained Prompt
-"Vendors with many products."
-
-Underspecified Prompt
-"List vendors and lead times."

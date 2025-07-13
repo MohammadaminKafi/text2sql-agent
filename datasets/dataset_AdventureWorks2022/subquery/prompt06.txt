@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"List state-province codes that have more addresses on record than the average state. Show the code and the number of addresses."
-
-Poorly-Explained Prompt
-"States with many addresses."
-
-Underspecified Prompt
-"Give me addresses."

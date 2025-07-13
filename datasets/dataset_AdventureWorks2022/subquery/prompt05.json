@@ -1,0 +1,6 @@
+{
+  "well-explained": "Return product categories that contain more products than the average category. Include the category ID, name and product count.",
+  "poorly-explained": "Categories with lots of stuff.",
+  "underspecified": "Show categories.",
+  "follow-up": "Return categories with product counts over the average."
+}

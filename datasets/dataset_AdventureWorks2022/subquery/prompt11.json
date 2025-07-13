@@ -1,0 +1,6 @@
+{
+  "well-explained": "Return the name, list price, total sales, and sales count for products priced higher than the average price in their subcategory. Sort the results by total sales.",
+  "poorly-explained": "Get products with high prices and their sales details, ordered by sales.",
+  "underspecified": "Show products and sales.",
+  "follow-up": "Select products priced above average and show total sales and count."
+}

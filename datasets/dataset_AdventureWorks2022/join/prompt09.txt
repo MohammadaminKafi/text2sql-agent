@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Retrieve each order’s ID and date along with each product sold in that order and its quantity, joining SalesOrderHeader → SalesOrderDetail → Product."
-
-Poorly-Explained Prompt
-"Show orders and products."
-
-Underspecified Prompt
-"List order items."

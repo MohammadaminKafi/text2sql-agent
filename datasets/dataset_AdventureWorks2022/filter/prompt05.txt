@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Find products that is out of stock. Return the product ID and name."
-
-Poorly-Explained Prompt
-"Show products with no inventory."
-
-Underspecified Prompt
-"List products."

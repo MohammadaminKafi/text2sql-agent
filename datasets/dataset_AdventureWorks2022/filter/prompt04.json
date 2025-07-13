@@ -1,0 +1,6 @@
+{
+  "well-explained": "Find products that have no inventory recorded (i.e., where the inventory quantity is NULL). Return the product ID and name.",
+  "poorly-explained": "Show products with no inventory.",
+  "underspecified": "List products.",
+  "follow-up": "Look for items with NULL quantity."
+}

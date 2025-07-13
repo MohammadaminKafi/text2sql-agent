@@ -1,0 +1,6 @@
+{
+  "well-explained": "Show products where the quantity in inventory is above the average for that product, along with the minimum and maximum quantities across all locations for that product.",
+  "poorly-explained": "Get products with high inventory and their min/max quantities.",
+  "underspecified": "Show product inventory.",
+  "follow-up": "Return inventory above average with min and max amounts."
+}

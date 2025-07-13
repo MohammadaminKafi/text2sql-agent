@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Return the name, list price, total sales, and sales count for products priced higher than the average price in their subcategory. Sort the results by total sales."
-
-Poorly-Explained Prompt
-"Get products with high prices and their sales details, ordered by sales."
-
-Underspecified Prompt
-"Show products and sales."
