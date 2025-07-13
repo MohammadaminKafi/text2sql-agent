@@ -34,12 +34,12 @@ See [`datasets/readme.md`](datasets/readme.md) for full details on each director
 
 ### Automated dataset testing
 The `datasets/test_dataset_aw.py` script can run all prompt/query pairs against a
-Vanna model and generate CSV reports. It now supports command line arguments to
+Vanna model and generate CSV reports. It supports command line arguments to
 configure the dataset location, connection string, model name, method
-(`ask` or `ask_agent`), and test level (number of prompt variants). Ground truth
-query results are cached to avoid re-running SQL on subsequent executions. After
-all tests finish an aggregate summary CSV is written with per-category accuracy
-and overall success rate.
+(`ask` or `ask_agent`), and test level. Ground truth query results are cached
+to avoid re-running SQL on subsequent executions. Each summary CSV includes
+match checks, a `row_match` flag, and a Jaccard overlap score. A final report
+aggregates mean Jaccard, row match rate, match rate, and exact match rate.
 
 ## Getting Started
 Install requirements and then run the main script:
