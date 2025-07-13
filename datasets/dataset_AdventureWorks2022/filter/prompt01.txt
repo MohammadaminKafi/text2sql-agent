@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Find customers who have placed orders after January 1, 2011, and return their ID and store name."
-
-Poorly-Explained Prompt
-"Get customers with recent orders."
-
-Underspecified Prompt
-"Show customer information."

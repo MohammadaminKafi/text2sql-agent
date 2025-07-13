@@ -1,0 +1,6 @@
+{
+  "well-explained": "List all products with their category and subcategory, and compute total quantity sold (zero if never sold), by joining Product → ProductSubcategory → ProductCategory and left‑joining SalesOrderDetail.",
+  "poorly-explained": "Show product sales by category.",
+  "underspecified": "List products and their sales.",
+  "Follow-Up Information": "Include product category info and total sold."
+}

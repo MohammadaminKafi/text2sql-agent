@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"List all employees with their ID, first name, last name, and hire date. Additionally, rank the employees within each job title group based on their hire date in descending order, where the most recent hires get the highest rank."
-
-Poorly-Explained Prompt
-"Give me employees and rank them by hire date within their job group."
-
-Underspecified Prompt
-"Show employees and hire dates."

@@ -1,0 +1,6 @@
+{
+  "well-explained": "Find each customer's ID and full name along with the total amount they've spent across all orders, using the Customer, Person, and SalesOrderHeader tables.",
+  "poorly-explained": "میزان هزینهٔ مشتریان را نشان بده.",
+  "underspecified": "List customers and how much they spent.",
+  "Follow-Up Information": "Sum up spending for every customer."
+}

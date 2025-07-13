@@ -1,0 +1,6 @@
+{
+  "well-explained": "Mark each Product whose Name contains 'bike' (case-insensitive) by returning ProductID, Name, and a flag 'ContainsBike' or 'Other', filtered to only those containing 'bike', ordered by Name.",
+  "poorly-explained": "Flag bike products.",
+  "underspecified": "Show products with bike.",
+  "Follow-Up Information": "Mark those containing 'bike' as ContainsBike."
+}

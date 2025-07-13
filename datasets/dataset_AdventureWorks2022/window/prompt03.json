@@ -1,0 +1,6 @@
+{
+  "well-explained": "List all salespeople along with their total sales, and rank them within their group based on total sales in descending order. Display the salesperson's ID, name, total sales, and their rank.",
+  "poorly-explained": "Get salespeople and their sales ranks.",
+  "underspecified": "List salespeople and their sales.",
+  "Follow-Up Information": "Rank salespeople by their total sales."
+}

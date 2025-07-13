@@ -1,0 +1,6 @@
+{
+  "well-explained": "List customers whose total spending exceeds the overall average order total, showing their ID, number of orders, and total spent, ordered by spending descending.",
+  "poorly-explained": "Big spenders above average.",
+  "underspecified": "Show top customers spending.",
+  "Follow-Up Information": "Limit results to customers spending above the overall average."
+}

@@ -1,0 +1,6 @@
+{
+  "well-explained": "Show sales people whose total sales exceed the overall average among all sales people. Include their ID, name and total sales amount.",
+  "poorly-explained": "Top sellers amounts.",
+  "underspecified": "Show sales data.",
+  "Follow-Up Information": "List salespeople whose totals exceed the overall average."
+}

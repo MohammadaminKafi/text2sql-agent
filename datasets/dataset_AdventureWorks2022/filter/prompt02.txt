@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"List employees whose pay rate is not above 100, showing their business entity ID, first name, and last name."
-
-Poorly-Explained Prompt
-"Give me employees without high pay rates."
-
-Underspecified Prompt
-"Show employee details."

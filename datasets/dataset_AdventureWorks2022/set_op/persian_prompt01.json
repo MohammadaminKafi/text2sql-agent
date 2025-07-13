@@ -1,0 +1,6 @@
+{
+  "well-explained": "List employees who were hired before January 1, 2020, but exclude those whose job title is 'Manager'. Show their business entity ID, first name, and last name.",
+  "poorly-explained": "Get employees hired before 2020 except managers.",
+  "underspecified": "Show employees hired before 2020.",
+  "Follow-Up Information": "Exclude employees whose title is 'Manager'."
+}

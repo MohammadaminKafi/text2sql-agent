@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Find the vendor names, product names, and credit ratings for vendors with a credit rating of 3 or lower. Sort the result by credit rating in ascending order."
-
-Poorly-Explained Prompt
-"Which vendors have bad ratings and what do they sell?"
-
-Underspecified Prompt
-"List vendor products."

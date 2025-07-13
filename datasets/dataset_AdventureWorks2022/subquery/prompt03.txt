@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Show sales people whose total sales exceed the overall average among all sales people. Include their ID, name and total sales amount."
-
-Poorly-Explained Prompt
-"Top sellers amounts."
-
-Underspecified Prompt
-"Show sales data."

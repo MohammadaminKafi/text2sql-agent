@@ -85,36 +85,34 @@ def parse_args() -> argparse.Namespace:
                         help="Vanna method to invoke")
     parser.add_argument("--level", type=int, default=1,
                         help="Number of prompt variants to evaluate")
+    parser.add_argument("--language", choices=["en", "fa"], default="en",
+                        help="Language of the prompt files")
     return parser.parse_args()
 
 def load_prompt(path: Path) -> Dict[str, str]:
-    """Return prompts from file."""
+    """Return prompts from JSON file."""
 
-    text = path.read_text().strip().splitlines()
-    sections: Dict[str, str] = {}
-    current = None
-    buffer: List[str] = []
-    for line in text:
-        line = line.strip()
-        if line.endswith("Prompt"):
-            if current:
-                sections[current] = "\n".join(buffer).strip().strip('"')
-            current = line.split()[0].lower()
-            buffer = []
-        else:
-            buffer.append(line)
-    if current:
-        sections[current] = "\n".join(buffer).strip().strip('"')
-    return sections
+    import json
 
-def collect_tests(dataset_dir: Path) -> Dict[str, List[Tuple[Path, Path, Dict[str, str]]]]:
-    """Collect pairs of query and prompt files grouped by category."""
+    return json.loads(path.read_text())
+
+def collect_tests(dataset_dir: Path, language: str = "en") -> Dict[str, List[Tuple[Path, Path, Dict[str, str]]]]:
+    """Collect pairs of query and prompt files grouped by category.
+
+    Parameters
+    ----------
+    dataset_dir: Path
+        Root directory of dataset
+    language: str
+        'en' for English prompts or 'fa' for Persian prompts
+    """
 
     tests: Dict[str, List[Tuple[Path, Path, Dict[str, str]]]] = {}
     for category in sorted(p.name for p in dataset_dir.iterdir() if p.is_dir()):
         cat_dir = dataset_dir / category
         queries = sorted(cat_dir.glob("query*.sql"))
-        prompts = sorted(cat_dir.glob("prompt*.txt"))
+        pattern = "prompt*.json" if language == "en" else "persian_prompt*.json"
+        prompts = sorted(cat_dir.glob(pattern))
         cases: List[Tuple[Path, Path, Dict[str, str]]] = []
         for q, pth in zip(queries, prompts):
             cases.append((q, pth, load_prompt(pth)))
@@ -320,7 +318,7 @@ def main() -> None:
     log_dir.mkdir(exist_ok=True)
 
     openai_cfg = {"api_key": API_KEY}
-    all_tests = collect_tests(dataset_dir)
+    all_tests = collect_tests(dataset_dir, language=args.language)
     total = sum(len(v) for v in all_tests.values())
     print(f"\nNumber of tests: {total}")
 

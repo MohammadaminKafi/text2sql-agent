@@ -1,0 +1,6 @@
+{
+  "well-explained": "Return a list of products that either have a list price greater than 1000 or are colored red. Show the product ID and name for each.",
+  "poorly-explained": "Give me products that are expensive or red.",
+  "underspecified": "List products.",
+  "Follow-Up Information": "Include items priced over 1000 or with color red."
+}

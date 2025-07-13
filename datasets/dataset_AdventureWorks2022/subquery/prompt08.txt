@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Display sales-order lines where the ordered quantity is higher than the average quantity ordered for the same product. Return order ID, product ID and quantity."
-
-Poorly-Explained Prompt
-"Big order details."
-
-Underspecified Prompt
-"List sales order details."

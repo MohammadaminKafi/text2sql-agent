@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"List vendors whose average purchase-order total is higher than the overall average purchase-order total. Show vendor ID, name and their average PO amount."
-
-Poorly-Explained Prompt
-"Vendors with big POs."
-
-Underspecified Prompt
-"List vendors."

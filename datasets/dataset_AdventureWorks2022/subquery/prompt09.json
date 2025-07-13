@@ -1,0 +1,6 @@
+{
+  "well-explained": "Return the name and list price of products that are more expensive than the average price in their subcategory, along with the average and maximum prices in that subcategory.",
+  "poorly-explained": "Get products that are more expensive than others in their category with some price stats.",
+  "underspecified": "Show products and prices.",
+  "Follow-Up Information": "Add average and max price per subcategory for comparison."
+}

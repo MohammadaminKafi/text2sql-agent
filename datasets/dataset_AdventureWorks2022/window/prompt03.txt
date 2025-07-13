@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"List all salespeople along with their total sales, and rank them within their group based on total sales in descending order. Display the salesperson's ID, name, total sales, and their rank."
-
-Poorly-Explained Prompt
-"Get salespeople and their sales ranks."
-
-Underspecified Prompt
-"List salespeople and their sales."

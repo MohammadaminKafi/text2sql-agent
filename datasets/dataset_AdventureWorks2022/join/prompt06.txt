@@ -1,8 +1,0 @@
-Well-Explained Prompt
-"Count how many products belong to each product category, joining Product → ProductSubcategory → ProductCategory."
-
-Poorly-Explained Prompt
-"Give me product counts by category."
-
-Underspecified Prompt
-"How many products are in categories?"

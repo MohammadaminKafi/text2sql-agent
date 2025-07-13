@@ -1,0 +1,6 @@
+{
+  "well-explained": "Aggregate sales by territory: number of distinct customers, total freight, and average freight, ordered by total freight descending.",
+  "poorly-explained": "Territory shipping costs.",
+  "underspecified": "Show freight per territory.",
+  "Follow-Up Information": "Show total and average freight per territory."
+}

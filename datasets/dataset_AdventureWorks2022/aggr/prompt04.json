@@ -1,0 +1,6 @@
+{
+  "well-explained": "Identify vendors supplying at least 3 products; show vendor ID, number of products, total and average lead time, ordered by average lead time.",
+  "poorly-explained": "Vendors with many products.",
+  "underspecified": "List vendors and lead times.",
+  "Follow-Up Information": "Only include vendors with at least three products."
+}

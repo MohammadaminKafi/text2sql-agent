@@ -1,0 +1,6 @@
+{
+  "well-explained": "Retrieve each order’s ID and date along with each product sold in that order and its quantity, joining SalesOrderHeader → SalesOrderDetail → Product.",
+  "poorly-explained": "Show orders and products.",
+  "underspecified": "List order items.",
+  "Follow-Up Information": "Give each order with its products and quantities."
+}

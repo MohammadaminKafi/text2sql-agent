@@ -1,0 +1,6 @@
+{
+  "well-explained": "For each product category, count distinct products, compute average and maximum list price, and order categories by average price descending.",
+  "poorly-explained": "Show category stats for products.",
+  "underspecified": "List categories with product prices.",
+  "Follow-Up Information": "Provide counts and average/max prices per category."
+}

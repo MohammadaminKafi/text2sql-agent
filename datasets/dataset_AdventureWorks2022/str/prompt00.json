@@ -1,0 +1,6 @@
+{
+  "well-explained": "Split each product’s Name into the first word and the remainder, for products whose Name contains at least one space, showing ProductID, ProductName, FirstWord, and RestOfName.",
+  "poorly-explained": "Break product names into words.",
+  "underspecified": "Parse product names.",
+  "Follow-Up Information": "Show the first word separately from the rest."
+}

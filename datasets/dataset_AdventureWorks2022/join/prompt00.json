@@ -1,0 +1,6 @@
+{
+  "well-explained": "Retrieve the product name, order date, and total due for sales orders where the total due exceeds $10,000. Include only products that were part of those orders and sort by order date in descending order.",
+  "poorly-explained": "Get products and order stuff where total is big and sort by newest.",
+  "underspecified": "Show me some product sales.",
+  "Follow-Up Information": "Restrict to orders over 10000 and sort newest first."
+}

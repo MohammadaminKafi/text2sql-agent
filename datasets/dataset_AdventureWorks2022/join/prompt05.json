@@ -1,0 +1,6 @@
+{
+  "well-explained": "List the product name, quantity, location ID, and location name for inventory records where the quantity is between 100 and 300 units. Sort the results by quantity in descending order.",
+  "poorly-explained": "Which items have a medium amount in stock?",
+  "underspecified": "Give me product inventory info.",
+  "Follow-Up Information": "Return inventory rows with quantity between 100 and 300."
+}

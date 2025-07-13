@@ -1,0 +1,6 @@
+{
+  "well-explained": "List vendors whose average purchase-order total is higher than the overall average purchase-order total. Show vendor ID, name and their average PO amount.",
+  "poorly-explained": "Vendors with big POs.",
+  "underspecified": "List vendors.",
+  "Follow-Up Information": "Keep vendors with average PO totals above the overall average."
+}
