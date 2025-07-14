@@ -1900,10 +1900,10 @@ class VannaBase(ABC):
         return sql, df, fig
 
     def ask_agent(self, question : str) -> Tuple[str, pd.DataFrame]:
-        self.create_new_thread(thread_type="react")
-
         if self.agent == None:
             self.create_agent()
+
+        self.create_new_thread(thread_type="react")
         
         doc_list = self.get_related_documentation(question)
 
@@ -2341,7 +2341,8 @@ class VannaBase(ABC):
             api_key = read_metis_api_key(),
             agent_toolkit: list = ["run_sql"],
     ):
-        
+        self.create_new_thread(thread_type="agent-init")
+
         chat_model = init_chat_model(
             model=model, 
             model_provider=model_provider, 
