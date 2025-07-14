@@ -2376,7 +2376,7 @@ class VannaBase(ABC):
         self.agent = create_react_agent(model=chat_model, tools=toolkit)
 
         self.log(
-            message=f"Agent initialized with {model} model and {model_provider} provider with {toolkit} as its toolkit"
+            message=f"Agent initialized with {model} model and {model_provider} provider with {toolkit} as its toolkit",
             title="Agent Initialization"
         )
         return

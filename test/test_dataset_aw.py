@@ -44,6 +44,7 @@ except Exception:
 API_KEY = read_metis_api_key()
 API_BASE_URL = "https://api.metisai.ir/openai/v1"
 DEFAULT_MODEL = "gpt-4o-mini"
+AGENT_TOOLKIT = ["run_sql"]
 
 
 class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
@@ -159,6 +160,14 @@ def main() -> None:
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     model_dir = log_dir / f"{args.model}-{args.method}-{current_time}"
     model_dir.mkdir(exist_ok=True)
+    
+    if args.method == "ask_agent":
+        vn.create_agent(
+            model=DEFAULT_MODEL,
+            api_base=API_BASE_URL,
+            api_key=API_KEY,
+            agent_toolkit=AGENT_TOOLKIT
+        )
 
     if vn.run_sql_is_set:
         print("\nVanna is connected to the database")
