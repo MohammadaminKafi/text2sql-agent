@@ -2418,7 +2418,7 @@ class VannaBase(ABC):
         return user_response
 
     def agent_query_rag(self, query : str, count : int) -> list:
-        pass
+        return self.get_related_documentation(query)
 
 class QueryArgs(PydanticBaseModelForTool):
     query: str = Field(..., description="SQL query to be executed")
