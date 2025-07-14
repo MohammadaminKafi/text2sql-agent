@@ -2373,6 +2373,18 @@ class VannaBase(ABC):
                 ),
                 args_schema=AskUserArgs
             )
+            toolkit.append(clarify_tool)
+        if "query_rag" in agent_toolkit:
+            retrieve_similar_vectors = StructuredTool.from_function(
+                func=self.agent_query_rag,
+                name="retrieve_similar_vectors",
+                description = (
+                    "Query a RAG system containing definition and natural language description of database tables. "
+                    "Should be used as natural language"
+                ),
+                args_schema=QueryRAGArgs
+            )
+            toolkit.append(retrieve_similar_vectors)
 
         self.agent = create_react_agent(model=chat_model, tools=toolkit)
 
@@ -2405,9 +2417,15 @@ class VannaBase(ABC):
             return "User did not respond"
         return user_response
 
+    def agent_query_rag(self, query : str, count : int) -> list:
+        pass
 
 class QueryArgs(PydanticBaseModelForTool):
     query: str = Field(..., description="SQL query to be executed")
 
 class AskUserArgs(PydanticBaseModelForTool):
     question: str = Field(..., description="Question to ask user for more clarification")
+
+class QueryRAGArgs(PydanticBaseModelForTool):
+    query: str = Field(..., description="Query to find similarities from vector database")
+    count: int = Field(..., description="Number of similar vectors to retreive from vector database")
