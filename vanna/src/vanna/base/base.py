@@ -1944,12 +1944,12 @@ class VannaBase(ABC):
 
         prompt_content = (
             "You are a T-SQL / Microsoft SQL Server expert. Please help to generate a SQL query to answer the user's question. "
-            "You are provided with a tool (run_sql) for querying the database, "
-            "a tool (ask_user) for asking the user if you need clarifications on the asked question. "
+            "You are provided with a tool (run_sql) for querying the database. "
+            #"a tool (ask_user) for asking the user if you need clarifications on the asked question. "
             "The database tables and columns are stored in a RAG you can query using a tool (query rag).\n"
             "Follow the guidelines to retrieve the best answer:\n"
             "- If the question is in any other language rather than English, translate it to English\n"
-            "- If the user's query is ambigious, ask the user for clarification. Avoid asking user for more data if applicable\n"
+            #"- If the user's query is ambigious, ask the user for clarification. Avoid asking user for more data if applicable\n"
             "- First query the RAG to see related tables\n"
             "- Then create a query and query the database\n"
             "- Finally evaluate if the retreived dataframe is a solution to what user has asked, if not repeat the process\n"
