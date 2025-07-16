@@ -1961,7 +1961,13 @@ class VannaBase(ABC):
         prompt = [{"role": "user", "content": prompt_content}]
 
         try:
-            self.agent.invoke({"messages": prompt})
+            result = self.agent.invoke({"messages": prompt})
+            if isinstance(result, dict) and "messages" in result:
+                chain_msgs = []
+                for m in result["messages"]:
+                    content = m.get("content", "") if isinstance(m, dict) else str(m)
+                    chain_msgs.append(content)
+                self.log(message="\n".join(chain_msgs), title="Agent Chain")
         except Exception as e:
             self.log(message=e, title="Exception in agent")
             if print_results:

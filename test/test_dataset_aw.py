@@ -128,7 +128,7 @@ def run_test_case(
         if prompt is None:
             raise ValueError("Prompt is None")
         if method == "ask_agent":
-            result = vn.ask_agent(question=prompt)
+            result = vn.ask_agent(question=prompt, print_results=False)
             if isinstance(result, tuple):
                 if len(result) > 0 and isinstance(result[0], str):
                     generated_sql = result[0]
@@ -272,6 +272,11 @@ def main() -> None:
                             match,
                             row_match,
                         ] + comparison_values)
+
+                        status = "SUCCESS" if not error else f"ERROR: {error}"
+                        print(
+                            f"-> {status}, match={match}, row_match={row_match}, jaccard={jaccard:.3f}"
+                        )
 
         generate_final_report(lang_dir)
 
