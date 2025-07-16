@@ -9,7 +9,7 @@ EXPECTED_KEYS = {"well-explained", "poorly-explained", "underspecified"}
 
 def load_prompt(path: Path) -> Dict[str, str]:
     """Return prompts from JSON file ensuring required keys exist."""
-    data = json.loads(path.read_text())
+    data = json.loads(path.read_text(encoding="utf-8"))
     missing = EXPECTED_KEYS - data.keys()
     if missing:
         raise ValueError(f"{path} missing keys: {', '.join(sorted(missing))}")
