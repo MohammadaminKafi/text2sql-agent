@@ -41,10 +41,16 @@ except Exception:
     def read_metis_api_key() -> str:
         return os.environ.get("OPENAI_API_KEY", "")
 
-API_KEY = read_metis_api_key()
-API_BASE_URL = "https://api.metisai.ir/openai/v1"
+use_avalai = True
+
+metis_base_url = "https://api.metisai.ir/openai/v1"
+avalai_base_url = "https://api.avalai.ir/v1"
+
+API_KEY = read_avalai_api_key() if use_avalai else read_metis_api_key()
+API_BASE_URL = avalai_base_url if use_avalai else read_metis_api_key()
 DEFAULT_MODEL = "gpt-4o-mini"
-AGENT_TOOLKIT = ["run_sql"]
+DEFAULT_MODE = "ask_agent"
+AGENT_TOOLKIT = ["run_sql", "ask_user", "query_rag"]
 
 
 class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
@@ -89,7 +95,7 @@ def parse_args() -> argparse.Namespace:
                         help="ODBC connection string for ground truth queries")
     parser.add_argument("--model", default=DEFAULT_MODEL,
                         help="Model name to evaluate")
-    parser.add_argument("--method", choices=["ask", "ask_agent"], default="ask",
+    parser.add_argument("--method", choices=["ask", "ask_agent"], default=DEFAULT_MODE,
                         help="Vanna method to invoke")
     parser.add_argument("--level", type=int, default=1,
                         help="Number of prompt variants to evaluate")

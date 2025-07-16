@@ -1933,13 +1933,26 @@ class VannaBase(ABC):
         self.agent_last_sql = None
         self.agent_last_df = None
 
-        doc_list = self.get_related_documentation(question)
+        # doc_list = self.get_related_documentation(question)
+
+        # prompt_content = (
+        #     "You are a T-SQL / Microsoft SQL Server expert. Please help to generate a SQL query to answer the question. "
+        #     "You are provided with a tool for querying the AdventureWorks2022 database. The tool name is \"run_sql\".\n"
+        #     f"You are provided with the description of related tables retrieved from RAG:\n{'\n\n'.join(doc_list)}\n"
+        #     f"The question is: {question}"
+        # )
 
         prompt_content = (
-            "You are a T-SQL / Microsoft SQL Server expert. Please help to generate a SQL query to answer the question. "
-            "You are provided with a tool for querying the AdventureWorks2022 database. The tool name is \"run_sql\".\n"
-            f"You are provided with the description of related tables retrieved from RAG:\n{'\n\n'.join(doc_list)}\n"
-            f"The question is: {question}"
+            "You are a T-SQL / Microsoft SQL Server expert. Please help to generate a SQL query to answer the user's question. "
+            "You are provided with a tool (run_sql) for querying the database, "
+            "a tool (ask_user) for asking the user if you need clarifications on the asked question. "
+            "The database tables and columns are stored in a RAG you can query using a tool (query rag). "
+            "Follow the guidelines to retrieve the best answer:\n"
+            "- If the question is in any other language rather than English, translate it to English"
+            "- Query the RAG to see related tables"
+            "- Query the database to see the tables if needed"
+            "- Evaluate if the retreived dataframe is a solution to what user has asked"
+            "- If the user's query is ambigious or you need more context for the question, ask the user for clarification"
         )
 
         prompt = [{"role": "user", "content": prompt_content}]
@@ -2385,7 +2398,7 @@ class VannaBase(ABC):
             model_provider = "openai",
             api_base = "https://api.metisai.ir/openai/v1",
             api_key = read_metis_api_key(),
-            agent_toolkit: list = ["run_sql"],
+            agent_toolkit: list = ["run_sql", "ask_user", "query_rag"],
     ):
         self.create_new_thread(thread_type="agent-init")
 
@@ -2438,6 +2451,7 @@ class VannaBase(ABC):
             message=f"Agent initialized with {model} model and {model_provider} provider with {toolkit} as its toolkit",
             title="Agent Initialization"
         )
+
         return
 
     def agent_run_sql_query(self, query : str) -> str:
@@ -2449,9 +2463,13 @@ class VannaBase(ABC):
             self.agent_last_df = None
             raise
         self.agent_last_df = df
+        
+        self.log(message=f"Run SQL query is called with prompt:\n{query}", title="Tool Call", save_df=True, df=df)
+
         return df.to_markdown()
     
     def agent_ask_user_clarification(self, question : str) -> str:
+
         prebuilt_responses = {
             0: "I don't know",
             1: "Yes",
@@ -2469,10 +2487,20 @@ class VannaBase(ABC):
             return prebuilt_responses[3]
         if user_response == None or user_response == "":
             return "User did not respond"
+        
+        self.log(message=f"Agent ask user:\n{question}\n\nUser responded:\n{user_response}", title="Tool Call")
+
         return user_response
 
     def agent_query_rag(self, query : str, count : int) -> list:
-        return self.get_related_documentation(query)
+        docs = "\n\n".join(self.get_related_documentation(query))
+
+        self.log(message=f"Agent queried the RAG for {count} similar vectors with:\n{query}\n\nRAG output:\n{docs}")
+
+        return docs
+    
+    def agent_gets_db_functions(self):
+        pass
 
 class QueryArgs(PydanticBaseModelForTool):
     query: str = Field(..., description="SQL query to be executed")
