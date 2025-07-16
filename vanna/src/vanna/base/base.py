@@ -143,7 +143,7 @@ class VannaBase(ABC):
     def log_df(self, df: pd.DataFrame, path):
         df.to_csv(path, index=False)
 
-    def log(self, message: str, title: str = "Info", echo: bool = True, save_df: bool = False, df: pd.DataFrame | None = None):
+    def log(self, message: str, title: str = "Info", echo: bool = False, save_df: bool = False, df: pd.DataFrame | None = None):
         if self.save_log:
             # Ensure thread name is set
             if not self.current_thread_name:
@@ -1946,14 +1946,17 @@ class VannaBase(ABC):
             "You are a T-SQL / Microsoft SQL Server expert. Please help to generate a SQL query to answer the user's question. "
             "You are provided with a tool (run_sql) for querying the database, "
             "a tool (ask_user) for asking the user if you need clarifications on the asked question. "
-            "The database tables and columns are stored in a RAG you can query using a tool (query rag). "
+            "The database tables and columns are stored in a RAG you can query using a tool (query rag).\n"
             "Follow the guidelines to retrieve the best answer:\n"
-            "- If the question is in any other language rather than English, translate it to English"
-            "- Query the RAG to see related tables"
-            "- Query the database to see the tables if needed"
-            "- Evaluate if the retreived dataframe is a solution to what user has asked"
-            "- If the user's query is ambigious or you need more context for the question, ask the user for clarification"
+            "- If the question is in any other language rather than English, translate it to English\n"
+            "- If the user's query is ambigious, ask the user for clarification. Avoid asking user for more data if applicable\n"
+            "- First query the RAG to see related tables\n"
+            "- Then create a query and query the database\n"
+            "- Finally evaluate if the retreived dataframe is a solution to what user has asked, if not repeat the process\n"
+            f"User's question: {question}"
         )
+
+        self.log(message=f"Prompt:\n{prompt_content}", title="Prompt")
 
         prompt = [{"role": "user", "content": prompt_content}]
 
@@ -2495,7 +2498,7 @@ class VannaBase(ABC):
     def agent_query_rag(self, query : str, count : int) -> list:
         docs = "\n\n".join(self.get_related_documentation(query))
 
-        self.log(message=f"Agent queried the RAG for {count} similar vectors with:\n{query}\n\nRAG output:\n{docs}")
+        self.log(message=f"Agent queried the RAG for {count} similar vectors with:\n{query}\n\nRAG output:\n{docs}", title="Tool Call")
 
         return docs
     
