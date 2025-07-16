@@ -242,8 +242,8 @@ def main() -> None:
                         if df_out is not None:
                             df_out.to_csv(out_path, index=False)
 
-                        gen_sql_path.write_text(gen_sql or "")
-                        prompt_txt_path.write_text(p_text or "")
+                        gen_sql_path.write_text(gen_sql or "", encoding="utf-8")
+                        prompt_txt_path.write_text(p_text or "", encoding="utf-8")
 
                         comparison_result = compare_dataframes_as_dataframe_safe(gt_df, df_out)
 
