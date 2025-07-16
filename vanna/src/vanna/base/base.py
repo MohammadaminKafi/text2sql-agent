@@ -1942,19 +1942,7 @@ class VannaBase(ABC):
         #     f"The question is: {question}"
         # )
 
-        prompt_content = (
-            "You are a T-SQL / Microsoft SQL Server expert. Please help to generate a SQL query to answer the user's question. "
-            "You are provided with a tool (run_sql) for querying the database. "
-            #"a tool (ask_user) for asking the user if you need clarifications on the asked question. "
-            "The database tables and columns are stored in a RAG you can query using a tool (query rag).\n"
-            "Follow the guidelines to retrieve the best answer:\n"
-            "- If the question is in any other language rather than English, translate it to English\n"
-            #"- If the user's query is ambigious, ask the user for clarification. Avoid asking user for more data if applicable\n"
-            "- First query the RAG to see related tables\n"
-            "- Then create a query and query the database\n"
-            "- Finally evaluate if the retreived dataframe is a solution to what user has asked, if not repeat the process\n"
-            f"User's question: {question}"
-        )
+        prompt_content = self._build_agent_prompt(question)
 
         self.log(message=f"Prompt:\n{prompt_content}", title="Prompt")
 
@@ -1962,12 +1950,7 @@ class VannaBase(ABC):
 
         try:
             result = self.agent.invoke({"messages": prompt})
-            if isinstance(result, dict) and "messages" in result:
-                chain_msgs = []
-                for m in result["messages"]:
-                    content = m.get("content", "") if isinstance(m, dict) else str(m)
-                    chain_msgs.append(content)
-                self.log(message="\n".join(chain_msgs), title="Agent Chain")
+            self._log_agent_chain(result)
         except Exception as e:
             self.log(message=e, title="Exception in agent")
             if print_results:
@@ -2403,7 +2386,7 @@ class VannaBase(ABC):
     # ---------- Agent Helper Methods
     def create_agent(
             self,
-            model = "gpt-4o-mini", 
+            model = "gpt-4o-mini",
             model_provider = "openai",
             api_base = "https://api.metisai.ir/openai/v1",
             api_key = read_metis_api_key(),
@@ -2412,13 +2395,14 @@ class VannaBase(ABC):
         self.create_new_thread(thread_type="agent-init")
 
         chat_model = init_chat_model(
-            model=model, 
+            model=model,
             model_provider=model_provider, 
             openai_api_base=api_base,
             openai_api_key=api_key,
         )
 
         toolkit = []
+        self.agent_toolkit = agent_toolkit
         if "run_sql" in agent_toolkit:
             query_tool = StructuredTool.from_function(
                 func=self.agent_run_sql_query,
@@ -2453,6 +2437,14 @@ class VannaBase(ABC):
                 args_schema=QueryRAGArgs
             )
             toolkit.append(retrieve_similar_vectors)
+        if "shamsi_to_gregorian" in agent_toolkit:
+            date_tool = StructuredTool.from_function(
+                func=self.agent_shamsi_to_gregorian,
+                name="shamsi_to_gregorian",
+                description="Convert a Shamsi (Jalali) date string to Gregorian YYYY-MM-DD format.",
+                args_schema=ShamsiDateArgs,
+            )
+            toolkit.append(date_tool)
 
         self.agent = create_react_agent(model=chat_model, tools=toolkit)
 
@@ -2507,9 +2499,86 @@ class VannaBase(ABC):
         self.log(message=f"Agent queried the RAG for {count} similar vectors with:\n{query}\n\nRAG output:\n{docs}", title="Tool Call")
 
         return docs
+
+    def agent_shamsi_to_gregorian(self, date: str) -> str:
+        """Convert a Shamsi (Jalali) date string to Gregorian ``YYYY-MM-DD``."""
+        try:
+            import jdatetime  # type: ignore
+        except ImportError:
+            raise DependencyError(
+                "You need to install required dependencies to execute this method,"
+                " run command: pip install jdatetime"
+            )
+
+        date_normalized = date.replace("-", "/")
+        try:
+            parts = [int(p) for p in date_normalized.split("/")]
+            if len(parts) != 3:
+                raise ValueError("Date must have year, month and day")
+            jalali = jdatetime.date(parts[0], parts[1], parts[2])
+            gregorian = jalali.togregorian()
+            result = gregorian.strftime("%Y-%m-%d")
+        except Exception as e:
+            self.log(message=f"Error converting date '{date}': {e}", title="Tool Error")
+            raise
+
+        self.log(message=f"Converted {date} -> {result}", title="Tool Call")
+        return result
     
     def agent_gets_db_functions(self):
         pass
+
+    # ---------- Agent Utility Methods
+    def _format_agent_messages(self, messages: list) -> str:
+        parts = []
+        for m in messages:
+            if isinstance(m, dict):
+                role = m.get("role", "assistant")
+                content = m.get("content", "")
+                parts.append(f"{role}: {content}")
+            else:
+                parts.append(str(m))
+        return "\n".join(parts)
+
+    def _log_agent_chain(self, result):
+        if isinstance(result, dict) and "messages" in result:
+            messages = result["messages"]
+        else:
+            messages = result
+        if messages:
+            formatted = self._format_agent_messages(messages)
+            self.log(message=formatted, title="Agent Chain")
+
+    def _build_agent_prompt(self, question: str) -> str:
+        toolkit = getattr(self, "agent_toolkit", [])
+        tool_lines = []
+        if "run_sql" in toolkit:
+            tool_lines.append("* `run_sql` to execute SQL queries on the database.")
+        if "ask_user" in toolkit:
+            tool_lines.append("* `ask_user` to request clarification from the user when needed.")
+        if "query_rag" in toolkit:
+            tool_lines.append("* `retrieve_similar_vectors` to search documentation about tables and columns.")
+        if "shamsi_to_gregorian" in toolkit:
+            tool_lines.append("* `shamsi_to_gregorian` to convert Persian (Shamsi) dates to Gregorian.")
+
+        tools_section = "\n".join(tool_lines)
+        if tools_section:
+            tools_section = "Available tools:\n" + tools_section + "\n"
+
+        prompt = (
+            "You are a T-SQL / Microsoft SQL Server expert. "
+            "Use the tools below to reason your way to the best answer.\n"
+            f"{tools_section}"
+            "Guidelines:\n"
+            "- Translate the question to English if it's written in another language.\n"
+            "- Search the RAG for related tables and columns.\n"
+            "- Plan a query and execute it using `run_sql`.\n"
+            "- Convert Persian dates with `shamsi_to_gregorian` when needed.\n"
+            "- Ask the user for clarification with `ask_user` if the question is ambiguous.\n"
+            "- Iterate until the results answer the question with confidence.\n"
+            f"User question: {question}"
+        )
+        return prompt
 
 class QueryArgs(PydanticBaseModelForTool):
     query: str = Field(..., description="SQL query to be executed")
@@ -2520,3 +2589,6 @@ class AskUserArgs(PydanticBaseModelForTool):
 class QueryRAGArgs(PydanticBaseModelForTool):
     query: str = Field(..., description="Query to find similarities from vector database")
     count: int = Field(..., description="Number of similar vectors to retreive from vector database")
+
+class ShamsiDateArgs(PydanticBaseModelForTool):
+    date: str = Field(..., description="Date in Shamsi (Jalali) calendar")
