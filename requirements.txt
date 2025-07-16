@@ -28,6 +28,7 @@ openai
 opensearch-py
 oracledb
 pandas
+jdatetime
 pinecone-client
 plotly
 psycopg2-binary
