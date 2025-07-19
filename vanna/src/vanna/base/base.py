@@ -123,13 +123,21 @@ class VannaBase(ABC):
                     self.system_message("Respond to user's message in one word"),
                     self.user_message("Hi!"),
                 ])
-            print(f"LLM responded to test connection with: {test_response}")
+            self.log(
+                message=f"LLM responded to test connection with: {test_response}",
+                title="LLM Test",
+                echo=True,
+            )
             if test_response.startswith('H'):
                 return True
             else:
                 return False
         except Exception as e:
-            print(f"Exception occurred in connection to LLM: {e}")
+            self.log(
+                message=f"Exception occurred in connection to LLM: {e}",
+                title="LLM Test",
+                echo=True,
+            )
             return False
 
     # ---------- Log Methods
@@ -727,7 +735,11 @@ class VannaBase(ABC):
 
         for example in question_sql_list:
             if example is None:
-                print("example is None")
+                self.log(
+                    message="example is None",
+                    title="SQL Prompt",
+                    echo=True,
+                )
             else:
                 if example is not None and "question" in example and "sql" in example:
                     message_log.append(self.user_message(example["question"]))
@@ -1249,7 +1261,7 @@ class VannaBase(ABC):
                 database=dbname,
                 **kwargs
             )
-            print(conn)
+            self.log(message=str(conn), title="ClickHouse Connection", echo=True)
         except Exception as e:
             raise ValidationError(e)
 
@@ -1406,15 +1418,23 @@ class VannaBase(ABC):
             except Exception as e:
                 raise ImproperlyConfigured(e)
         else:
-            print("Not using Google Colab.")
+            self.log(
+                message="Not using Google Colab.",
+                title="BigQuery Connection",
+                echo=True,
+            )
 
         conn = None
 
         if not cred_file_path:
             try:
                 conn = bigquery.Client(project=project_id)
-            except:
-                print("Could not found any google cloud implicit credentials")
+            except Exception:
+                self.log(
+                    message="Could not found any google cloud implicit credentials",
+                    title="BigQuery Connection",
+                    echo=True,
+                )
         else:
             # Validate file path and pemissions
             validate_config_path(cred_file_path)
@@ -1471,7 +1491,11 @@ class VannaBase(ABC):
             path = ":memory:"
         else:
             # Path to save the downloaded database
-            print(os.path.exists(url))
+            self.log(
+                message=str(os.path.exists(url)),
+                title="DuckDB File Exists",
+                echo=True,
+            )
             if os.path.exists(url):
                 path = url
             elif url.startswith("md") or url.startswith("motherduck"):
@@ -1652,11 +1676,11 @@ class VannaBase(ABC):
             return df
 
           except presto.Error as e:
-            print(e)
+            self.log(message=e, title="Presto Error", echo=True)
             raise ValidationError(e)
 
           except Exception as e:
-            print(e)
+            self.log(message=e, title="Presto Exception", echo=True)
             raise e
 
       self.run_sql_is_set = True
@@ -1749,11 +1773,11 @@ class VannaBase(ABC):
             return df
 
           except hive.Error as e:
-            print(e)
+            self.log(message=e, title="Hive Error", echo=True)
             raise ValidationError(e)
 
           except Exception as e:
-            print(e)
+            self.log(message=e, title="Hive Exception", echo=True)
             raise e
 
       self.run_sql_is_set = True
@@ -1832,11 +1856,13 @@ class VannaBase(ABC):
                 Code = __import__("IPython.display", fromList=["Code"]).Code
                 display(Code(sql))
             except Exception as e:
-                print(sql)
+                self.log(message=sql, title="Generated SQL", echo=True)
 
         if self.run_sql_is_set is False:
-            print(
-                "If you want to run the SQL query, connect to a database first."
+            self.log(
+                message="If you want to run the SQL query, connect to a database first.",
+                title="Run SQL",
+                echo=True,
             )
 
             self.log(echo=False, message="Exited beacuse no database engine is connected", title="Exit")
@@ -1857,7 +1883,7 @@ class VannaBase(ABC):
                     ).display
                     display(df)
                 except Exception as e:
-                    print(df)
+                    self.log(message=df, title="Query Results", echo=True)
 
             if auto_train and len(df) > 0:
                 self.add_question_sql(question=question, sql=sql)
@@ -1885,7 +1911,11 @@ class VannaBase(ABC):
                 except Exception as e:
                     # Print stack trace
                     traceback.print_exc()
-                    print("Couldn't run plotly code: ", e)
+                    self.log(
+                        message=f"Couldn't run plotly code: {e}",
+                        title="Plotly Error",
+                        echo=True,
+                    )
                     if print_results:
                         return None
                     else:
@@ -1967,7 +1997,7 @@ class VannaBase(ABC):
                 display = __import__("IPython.display", fromlist=["display"]).display
                 display(df)
             except Exception:
-                print(df)
+                self.log(message=df, title="Agent Results", echo=True)
 
         return sql, df, fig
 
@@ -2035,15 +2065,23 @@ class VannaBase(ABC):
     # ---------- Helper Methods
     def _get_databases(self) -> List[str]:
         try:
-            print("Trying INFORMATION_SCHEMA.DATABASES")
+            self.log(
+                message="Trying INFORMATION_SCHEMA.DATABASES",
+                title="Database Detection",
+                echo=True,
+            )
             df_databases = self.run_sql("SELECT * FROM INFORMATION_SCHEMA.DATABASES")
         except Exception as e:
-            print(e)
+            self.log(message=e, title="Database Detection", echo=True)
             try:
-                print("Trying SHOW DATABASES")
+                self.log(
+                    message="Trying SHOW DATABASES",
+                    title="Database Detection",
+                    echo=True,
+                )
                 df_databases = self.run_sql("SHOW DATABASES")
             except Exception as e:
-                print(e)
+                self.log(message=e, title="Database Detection", echo=True)
                 return []
 
         return df_databases["DATABASE_NAME"].unique().tolist()
@@ -2143,7 +2181,11 @@ class VannaBase(ABC):
 
         if use_historical_queries:
             try:
-                print("Trying query history")
+                self.log(
+                    message="Trying query history",
+                    title="Training Plan",
+                    echo=True,
+                )
                 df_history = self.run_sql(
                     """ select * from table(information_schema.query_history(result_limit => 5000)) order by start_time"""
                 )
@@ -2187,7 +2229,7 @@ class VannaBase(ABC):
                     )
 
             except Exception as e:
-                print(e)
+                self.log(message=e, title="Training Plan", echo=True)
 
         databases = self._get_databases()
 
@@ -2198,7 +2240,11 @@ class VannaBase(ABC):
             try:
                 df_tables = self._get_information_schema_tables(database=database)
 
-                print(f"Trying INFORMATION_SCHEMA.COLUMNS for {database}")
+                self.log(
+                    message=f"Trying INFORMATION_SCHEMA.COLUMNS for {database}",
+                    title="Training Plan",
+                    echo=True,
+                )
                 df_columns = self.run_sql(
                     f"SELECT * FROM {database}.INFORMATION_SCHEMA.COLUMNS"
                 )
@@ -2252,10 +2298,10 @@ class VannaBase(ABC):
                             )
 
                     except Exception as e:
-                        print(e)
+                        self.log(message=e, title="Training Plan", echo=True)
                         pass
             except Exception as e:
-                print(e)
+                self.log(message=e, title="Training Plan", echo=True)
 
         return plan
 
