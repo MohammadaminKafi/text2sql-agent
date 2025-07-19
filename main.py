@@ -30,7 +30,7 @@ def main() -> None:
     }
 
     llm_cfg = {
-        "model": "gpt-4o"
+        "model": "gpt-4o-mini"
     }
 
     vn = MyVanna(openai_config=avalai_cfg, llm_config=llm_cfg)

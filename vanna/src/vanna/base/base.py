@@ -2390,7 +2390,7 @@ class VannaBase(ABC):
             model_provider = "openai",
             api_base = "https://api.metisai.ir/openai/v1",
             api_key = read_metis_api_key(),
-            agent_toolkit: list = ["run_sql", "ask_user", "query_rag"],
+            agent_toolkit: list = ["run_sql", "query_rag"],
     ):
         self.create_new_thread(thread_type="agent-init")
 
@@ -2467,7 +2467,7 @@ class VannaBase(ABC):
         
         self.log(message=f"Run SQL query is called with prompt:\n{query}", title="Tool Call", save_df=True, df=df)
 
-        return df.to_markdown()
+        return df.head(n=5).to_markdown()
     
     def agent_ask_user_clarification(self, question : str) -> str:
 
