@@ -1,22 +1,30 @@
 html_content = """<!doctype html>
-<html lang=\"en\">
+<html lang=\"en\" class=\"h-full\">
 <head>
   <meta charset=\"UTF-8\">
+  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
   <title>Vanna Ask</title>
+  <link rel=\"icon\" href=\"/vanna.svg\" />
+  <link rel=\"stylesheet\" href=\"/assets/vanna.css\">
 </head>
-<body>
-  <h1>Vanna Ask</h1>
-  <textarea id=\"question\" rows=\"4\" cols=\"60\"></textarea><br>
-  <label for=\"method\">Method:</label>
-  <select id=\"method\">
-    <option value=\"ask\">ask</option>
-    <option value=\"ask_agent\" selected>ask_agent</option>
-  </select>
-  <button onclick=\"submitQuestion()\">Submit</button>
-  <h2>SQL</h2>
-  <pre id=\"sql\"></pre>
-  <h2>Result</h2>
-  <pre id=\"result\"></pre>
+<body class=\"h-full bg-gray-50 flex flex-col\">
+  <div class=\"max-w-3xl w-full mx-auto p-4\">
+    <h1 class=\"text-2xl font-bold mb-4\">Vanna Ask</h1>
+    <textarea id=\"question\" rows=\"4\" class=\"w-full p-2 border rounded-md mb-3\" placeholder=\"Ask a question...\"></textarea>
+    <div class=\"mb-3\">
+        <label for=\"method\" class=\"mr-2 font-semibold\">Method:</label>
+        <select id=\"method\" class=\"border rounded p-1\">
+            <option value=\"ask\">ask</option>
+            <option value=\"ask_agent\" selected>ask_agent</option>
+        </select>
+        <button class=\"ml-4 px-4 py-2 bg-blue-600 text-white rounded\" onclick=\"submitQuestion()\">Submit</button>
+    </div>
+    <h2 class=\"text-xl font-semibold mt-6\">SQL</h2>
+    <pre id=\"sql\" class=\"bg-gray-100 p-2 rounded\"></pre>
+    <h2 class=\"text-xl font-semibold mt-6\">Result</h2>
+    <pre id=\"result\" class=\"bg-gray-100 p-2 rounded\"></pre>
+  </div>
+<script src=\"/assets/vanna.js\"></script>
 <script>
 function submitQuestion() {
   const q = document.getElementById('question').value;
