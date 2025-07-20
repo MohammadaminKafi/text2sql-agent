@@ -62,6 +62,7 @@ import json
 import re
 import sqlite3
 import traceback
+import dataclasses
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Union
 from urllib.parse import urlparse
@@ -2573,44 +2574,74 @@ class VannaBase(ABC):
         pass
 
     # ---------- Agent Utility Methods
+    def _to_serializable(self, obj: Any) -> Any:
+        """Attempt to convert various message objects to simple Python types."""
+        if isinstance(obj, dict):
+            return obj
+        if dataclasses.is_dataclass(obj):
+            return dataclasses.asdict(obj)
+        for attr in ("model_dump", "dict", "to_dict"):
+            if hasattr(obj, attr):
+                try:
+                    return getattr(obj, attr)()
+                except Exception:
+                    pass
+        if hasattr(obj, "model_dump_json"):
+            try:
+                return json.loads(obj.model_dump_json())
+            except Exception:
+                pass
+        if hasattr(obj, "__dict__"):
+            try:
+                return json.loads(json.dumps(obj.__dict__, default=str))
+            except Exception:
+                return {k: self._to_serializable(v) for k, v in obj.__dict__.items()}
+        try:
+            return json.loads(str(obj))
+        except Exception:
+            return str(obj)
+
     def _format_agent_messages(self, messages: list) -> str:
         parts = []
         for m in messages:
-            if isinstance(m, dict):
-                role = m.get("role", "assistant")
-                content = m.get("content", "")
+            data = self._to_serializable(m)
+            if isinstance(data, dict) and "role" in data and "content" in data:
+                role = data.get("role", "assistant")
+                content = data.get("content", "")
                 parts.append(f"{role}: {content}")
             else:
-                parts.append(str(m))
+                parts.append(str(data))
         return "\n".join(parts)
 
     def _agent_messages_to_tree(self, messages: list):
         tree = []
         for m in messages:
-            if not isinstance(m, dict):
-                tree.append({"message": str(m)})
+            data = self._to_serializable(m)
+            if not isinstance(data, dict):
+                tree.append({"message": data})
                 continue
 
-            node = {"role": m.get("role")}
-            if m.get("id"):
-                node["id"] = m.get("id")
-            if m.get("name"):
-                node["name"] = m.get("name")
-            if m.get("content"):
-                node["content"] = m.get("content")
-            if m.get("tool_call_id"):
-                node["tool_call_id"] = m.get("tool_call_id")
+            node = {"role": data.get("role")}
+            if data.get("id"):
+                node["id"] = data.get("id")
+            if data.get("name"):
+                node["name"] = data.get("name")
+            if data.get("content"):
+                node["content"] = data.get("content")
+            if data.get("tool_call_id"):
+                node["tool_call_id"] = data.get("tool_call_id")
 
-            add_kwargs = m.get("additional_kwargs", {})
+            add_kwargs = data.get("additional_kwargs", {})
             tool_calls = add_kwargs.get("tool_calls")
             if tool_calls:
                 calls = []
                 for tc in tool_calls:
+                    tc_data = self._to_serializable(tc)
                     call = {
-                        "id": tc.get("id"),
-                        "type": tc.get("type"),
-                        "name": tc.get("function", {}).get("name"),
-                        "arguments": tc.get("function", {}).get("arguments"),
+                        "id": tc_data.get("id"),
+                        "type": tc_data.get("type"),
+                        "name": tc_data.get("function", {}).get("name"),
+                        "arguments": tc_data.get("function", {}).get("arguments"),
                     }
                     calls.append(call)
                 node["tool_calls"] = calls
