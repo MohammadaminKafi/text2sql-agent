@@ -2390,7 +2390,7 @@ class VannaBase(ABC):
             model_provider = "openai",
             api_base = "https://api.metisai.ir/openai/v1",
             api_key = read_metis_api_key(),
-            agent_toolkit: list = ["run_sql", "query_rag"],
+            agent_toolkit: list = ["run_sql", "ask_user", "query_rag"],
     ):
         self.create_new_thread(thread_type="agent-init")
 
@@ -2408,7 +2408,7 @@ class VannaBase(ABC):
                 func=self.agent_run_sql_query,
                 name="run_sql",
                 description = (
-                            "Execute a raw SQL query against the connected database and return the result "
+                            "Execute a raw SQL query against the connected database and return first 5 rows of the result "
                             "as a Pandas DataFrame formatted in Markdown. Useful for reading, analyzing, "
                             "or summarizing tabular data. The input should be a valid SQL query string. "
                         ),
@@ -2421,7 +2421,7 @@ class VannaBase(ABC):
                 name="ask_user",
                 description = (
                     "Asks user for more clarification and returns the user's response. "
-                    "Should be used as natural language"
+                    "Should be asked in the same language as user has asked the question"
                 ),
                 args_schema=AskUserArgs
             )
@@ -2567,15 +2567,16 @@ class VannaBase(ABC):
 
         prompt = (
             "You are a T-SQL / Microsoft SQL Server expert. "
+            "If asking the use for more information, always ask in the same language as user has asked the question"
             "Use the tools below to reason your way to the best answer.\n"
             f"{tools_section}"
             "Guidelines:\n"
-            "- Translate the question to English if it's written in another language.\n"
-            "- Search the RAG for related tables and columns.\n"
-            "- Plan a query and execute it using `run_sql`.\n"
-            "- Convert Persian dates with `shamsi_to_gregorian` when needed.\n"
-            "- Ask the user for clarification with `ask_user` if the question is ambiguous.\n"
-            "- Iterate until the results answer the question with confidence.\n"
+            "1. Translate the question to English if it's written in another language. Never ask user for clarification about the translation.\n"
+            "2. Search the RAG for related tables and columns.\n"
+            "3. Try to create a structured prompt that contains the exact filters, column names, groupings and orderings if required.\n"
+            "4. If the current structured prompt is ambigious (there is mismatch between names) try providing user with options to choose (if the ask_user tool is available).\n"
+            "5. Plan a query and execute it using `run_sql`.\n"
+            "6. Iterate until the results answer the question with confidence.\n"
             f"User question: {question}"
         )
         return prompt
