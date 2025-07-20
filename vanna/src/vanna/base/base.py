@@ -2524,15 +2524,15 @@ class VannaBase(ABC):
         }
         user_response = input(f"Agent has asked you for more clarification: {question}\n0 -> I don't know, 1 -> Yes, 2 -> No, 3 -> Doesn't matter\n")
         if user_response == "0":
-            return prebuilt_responses[0]
-        if user_response == "1":
-            return prebuilt_responses[1]
-        if user_response == "2":
-            return prebuilt_responses[2]
-        if user_response == "3":
-            return prebuilt_responses[3]
-        if user_response == None or user_response == "":
-            return "User did not respond"
+            user_response =  prebuilt_responses[0]
+        elif user_response == "1":
+            user_response = prebuilt_responses[1]
+        elif user_response == "2":
+            user_response = prebuilt_responses[2]
+        elif user_response == "3":
+            user_response = prebuilt_responses[3]
+        elif user_response == None or user_response == "":
+            user_response = "User did not respond"
         
         self.log(message=f"Agent ask user:\n{question}\n\nUser responded:\n{user_response}", title="Tool Call")
 
@@ -2574,7 +2574,7 @@ class VannaBase(ABC):
         pass
 
     # ---------- Agent Utility Methods
-    def _to_serializable(self, obj: Any) -> Any:
+    def _to_serializable(self, obj: any) -> any:
         """Attempt to convert various message objects to simple Python types."""
         if isinstance(obj, dict):
             return obj
