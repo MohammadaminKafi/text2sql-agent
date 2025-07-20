@@ -175,6 +175,25 @@ class VannaBase(ABC):
         # Print to console if echo
         if echo and self.verbose:
             print(f"{title}: {message}")
+
+    def log_json(self, data, title: str = "Info"):
+        """Save the provided data as a JSON log file."""
+        if self.save_log:
+            if not self.current_thread_name:
+                raise ValueError("current_thread_name is not set.")
+            if self.current_log_id is None:
+                self.current_log_id = 0
+
+            log_dir = f"./{self.log_dir}/{self.current_thread_name}"
+            os.makedirs(log_dir, exist_ok=True)
+
+            filename = f"{self.current_log_id:02d}-{title}.json"
+            filepath = os.path.join(log_dir, filename)
+
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+            self.current_log_id += 1
     
     def _response_language(self) -> str:
         if self.language is None:
@@ -218,9 +237,18 @@ class VannaBase(ABC):
         ddl_list = self.get_related_ddl(question, **kwargs)
         doc_list = self.get_related_documentation(question, **kwargs)
 
-        self.log(message=f"Retrieved question-sql pairs from VDB:\n\n{'\n\n'.join(question_sql_list)}", title="Retrieved Question-SQL Pair")
-        self.log(message=f"Retrieved DDL from VDB:\n\n{'\n\n'.join(ddl_list)}", title="Retrieved DDL")
-        self.log(message=f"Retrieved documents from VDB:\n\n{'\n\n'.join(doc_list)}", title="Retrieved Documents")
+        self.log(
+            message="Retrieved question-sql pairs from VDB:\n\n" + "\n\n".join(question_sql_list),
+            title="Retrieved Question-SQL Pair",
+        )
+        self.log(
+            message="Retrieved DDL from VDB:\n\n" + "\n\n".join(ddl_list),
+            title="Retrieved DDL",
+        )
+        self.log(
+            message="Retrieved documents from VDB:\n\n" + "\n\n".join(doc_list),
+            title="Retrieved Documents",
+        )
 
         prompt = self.get_sql_prompt(
             initial_prompt=initial_prompt,
@@ -2030,7 +2058,13 @@ class VannaBase(ABC):
                 elif item.item_type == TrainingPlanItem.ITEM_TYPE_SQL:
                     self.add_question_sql(question=item.item_name, sql=item.item_value)
 
-            self.log(message=f"Training on a plan:\n\n{"\n\n".join(item.item_value for item in plan._plan)}", title="Train on Plan", echo=False)
+            self.log(
+                message="Training on a plan:\n\n" + "\n\n".join(
+                    item.item_value for item in plan._plan
+                ),
+                title="Train on Plan",
+                echo=False,
+            )
 
     # ---------- Helper Methods
     def _get_databases(self) -> List[str]:
@@ -2114,7 +2148,13 @@ class VannaBase(ABC):
                     )
                     doc = f"The following columns are in the {schema}.{table} table in the {database} database:\n"
                     doc += f"{self.extract_column_types(df_columns_filtered_to_table[columns])}\n"
-                    doc += f"Provided description for the table: {self.llm_describe_table(doc=doc, rows=self.get_table_top_rows(table_name=f"{schema}.{table}"))}"
+                    doc += (
+                        "Provided description for the table: "
+                        + self.llm_describe_table(
+                            doc=doc,
+                            rows=self.get_table_top_rows(table_name=f"{schema}.{table}"),
+                        )
+                    )
 
                     plan._plan.append(
                         TrainingPlanItem(
@@ -2125,7 +2165,11 @@ class VannaBase(ABC):
                         )
                     )
 
-        self.log(message=f"The following tables found:\n{'\n'.join(plan.get_summary())}", title="Plan Table", echo=False)
+        self.log(
+            message="The following tables found:\n" + "\n".join(plan.get_summary()),
+            title="Plan Table",
+            echo=False,
+        )
 
         return plan
 
@@ -2540,6 +2584,40 @@ class VannaBase(ABC):
                 parts.append(str(m))
         return "\n".join(parts)
 
+    def _agent_messages_to_tree(self, messages: list):
+        tree = []
+        for m in messages:
+            if not isinstance(m, dict):
+                tree.append({"message": str(m)})
+                continue
+
+            node = {"role": m.get("role")}
+            if m.get("id"):
+                node["id"] = m.get("id")
+            if m.get("name"):
+                node["name"] = m.get("name")
+            if m.get("content"):
+                node["content"] = m.get("content")
+            if m.get("tool_call_id"):
+                node["tool_call_id"] = m.get("tool_call_id")
+
+            add_kwargs = m.get("additional_kwargs", {})
+            tool_calls = add_kwargs.get("tool_calls")
+            if tool_calls:
+                calls = []
+                for tc in tool_calls:
+                    call = {
+                        "id": tc.get("id"),
+                        "type": tc.get("type"),
+                        "name": tc.get("function", {}).get("name"),
+                        "arguments": tc.get("function", {}).get("arguments"),
+                    }
+                    calls.append(call)
+                node["tool_calls"] = calls
+
+            tree.append(node)
+        return tree
+
     def _log_agent_chain(self, result):
         if isinstance(result, dict) and "messages" in result:
             messages = result["messages"]
@@ -2548,6 +2626,8 @@ class VannaBase(ABC):
         if messages:
             formatted = self._format_agent_messages(messages)
             self.log(message=formatted, title="Agent Chain")
+            tree = self._agent_messages_to_tree(messages)
+            self.log_json(tree, title="Agent Chain")
 
     def _build_agent_prompt(self, question: str) -> str:
         toolkit = getattr(self, "agent_toolkit", [])
