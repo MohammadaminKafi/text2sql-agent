@@ -1,0 +1,13 @@
+{
+    "en": {
+        "sample0": "Aggregate sales by territory: number of distinct customers, total freight, and average freight.",
+        "sample1": "Provide a summary of freight and customer counts by territory, including total and average freight and distinct customer numbers.",
+        "sample2": "For each territory, report how many different customers there are, along with the total and average freight."
+    },
+    "fa": {
+        "sample0": "فروش را بر اساس منطقه تجمیع کن: تعداد مشتریان متمایز، مجموع کرایه حمل و میانگین کرایه حمل.",
+        "sample1": "خلاصه‌ای از کرایه حمل و تعداد مشتریان را بر اساس منطقه ارائه بده، شامل مجموع و میانگین کرایه و تعداد مشتریان متمایز.",
+        "sample2": "برای هر منطقه گزارش بده که چند مشتری متفاوت وجود دارد، به‌همراه مجموع و میانگین کرایه حمل.",
+        "sample3": "برای هر ناحیه تعداد مشتریان متمایز، مجموع و میانگین کرایه را نشان بده."
+    }
+}

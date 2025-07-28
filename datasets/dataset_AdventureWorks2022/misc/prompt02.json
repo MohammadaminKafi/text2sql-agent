@@ -1,0 +1,12 @@
+{
+    "en": {
+        "sample0": "For each product category, count distinct products, compute average and maximum list price, and order categories by average price.",
+        "sample1": "Count distinc products in each category and show the average and maximum list price ordered by average price"
+    },
+    "fa": {
+        "sample0": "برای هر شاخه از محصولات، تعداد محصولات متفاوت و میانگین و بیشینه قیمت محصولات را به ترتیب میانگین قیمت نشان بده.",
+        "sample1": "تعداد محصولات متفاوت در هر شاخه به همراه میانگین و بیشینه قیمت به ترتیب میانگین قیمت نشان بده.",
+        "sample2": "برای هر گروه از محصولات، تعداد محصولات متفاوت به همراه بیشینه و میانگین قیمت مرتب شده بر اساس میانگین قیمت را نشان بده",
+        "sample3": "تعداد اجناس متفاوت را به همراه میانگین و بیشینه قیمت برای هر دسته از اجناس نشان بده، مرتب شده بر اساس میانگین قیمت."
+    }
+}

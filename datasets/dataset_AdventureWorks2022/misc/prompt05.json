@@ -1,0 +1,17 @@
+{
+    "en": {
+        "sample0": "Compute the number of shipped orders, total revenue, and average freight per order for each year.",
+        "sample1": "Find the yearly count of shipped orders, their total revenue, and the average freight cost per order.",
+        "sample2": "Report, by year, the number of shipped orders, the sum of their revenue, and the average freight cost.",
+        "sample3": "Determine how many orders were shipped each year, along with their combined revenue and average freight charges.",
+        "sample4": "For each year, calculate the number of shipped orders, the total revenue generated, and the mean freight per order."
+    },
+    "fa": {
+        "sample0": "تعداد سفارش‌های ارسال‌شده، درآمد کل و میانگین هزینه حمل‌ونقل هر سفارش را برای هر سال محاسبه کن.",
+        "sample1": "تعداد سالانه سفارش‌های ارسال‌شده، درآمد کل آن‌ها و میانگین هزینه حمل‌ونقل هر سفارش را بیاب.",
+        "sample2": "تعداد سفارش‌های ارسال‌شده، مجموع درآمد آن‌ها و میانگین هزینه حمل‌ونقل را به تفکیک سال گزارش کن.",
+        "sample3": "تعیین کن که هر سال چه تعداد سفارش ارسال شده، درآمد کلی آن‌ها چقدر بوده و میانگین هزینه حمل‌ونقل چقدر بوده است.",
+        "sample4": "برای هر سال، تعداد سفارش‌های ارسال‌شده، درآمد کل ایجادشده و میانگین هزینه حمل‌ونقل هر سفارش را محاسبه کن."
+    }
+
+}

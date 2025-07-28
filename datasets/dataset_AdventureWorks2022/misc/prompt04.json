@@ -1,0 +1,13 @@
+{
+    "en": {
+        "sample0": "Identify vendors supplying at least 3 products; show vendor ID, number of products, total and average lead time.",
+        "sample1": "Find vendors who offer no fewer than three products, and display their ID, how many products they supply, the sum of lead times, and the average lead time.",
+        "sample2": "Get the details of vendors who supply three or more items, including their vendor ID, total number of products, cumulative lead time, and average lead time."
+    },
+    "fa": {
+        "sample0": "فروشندگانی را شناسایی کن که حداقل ۳ محصول ارائه می‌دهند؛ شناسه فروشنده، تعداد محصولات، مجموع و میانگین زمان تأمین را نمایش بده.",
+        "sample1": "فروشندگانی را پیدا کن که حداقل سه محصول عرضه می‌کنند و شناسه آن‌ها، تعداد محصولاتی که ارائه می‌دهند، مجموع زمان‌های تأمین و میانگین زمان تأمین را نمایش بده.",
+        "sample2": "جزئیات فروشندگانی را که سه یا بیشتر محصول عرضه می‌کنند دریافت کنید، شامل شناسه فروشنده، تعداد کل محصولات، مجموع زمان تأمین و میانگین زمان تأمین.",
+        "sample3": "لیستی از فروشندگانی که حداقل ۳ محصول ارائه می‌کنند به همراه تعداد اجناس ارائه شده و مجموع و میانگین زمان تامین را نشان بده."
+    }
+}
