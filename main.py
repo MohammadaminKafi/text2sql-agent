@@ -10,13 +10,18 @@ from no_commit_utils.credentials_utils import read_avalai_api_key
 
 os.environ["CHROMA_CACHE_DIR"] = "./cache/chroma_cache"
 
+MODEL = "gemma-3-27b-it" # "gpt-4o-mini"
+BASE_API = "https://api.avalapis.ir/v1" #"https://api.avalai.ir/v1"
+API_KEY = read_avalai_api_key()
+
+USE_AGENT = True
 
 # ---- Compose with ChromaDB for the full Vanna client ---------------------
 class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
     def __init__(self, openai_config : dict, llm_config: dict = {}, vdb_config: dict = {}):
         client = OpenAI(
             api_key=openai_config["api_key"],
-            base_url=openai_config.get("base_url", "https://api.avalai.ir/v1"),
+            base_url=openai_config.get("base_url", BASE_API),
         )
         ChromaDB_VectorStore.__init__(self, config=vdb_config)
         OpenAI_Chat.__init__(self, config=llm_config, client=client)
@@ -25,12 +30,12 @@ class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
 # ---- 3. Demo / entry-point ---------------------------------------------------
 def main() -> None:
     avalai_cfg = {
-        "api_key":  read_avalai_api_key(),
-        "base_url": "https://api.avalapis.ir/v1",
+        "api_key":  API_KEY,
+        "base_url": BASE_API,
     }
 
     llm_cfg = {
-        "model": "gpt-4o-mini"
+        "model": MODEL
     }
 
     vn = MyVanna(openai_config=avalai_cfg, llm_config=llm_cfg)
@@ -69,13 +74,17 @@ def main() -> None:
 
 
     # ------------- Interactive loop ------------------
+    if USE_AGENT:
+        vn.create_agent(model=MODEL, api_base=BASE_API, api_key=API_KEY)
     print("Type 'exit' or 'quit' to leave.")
     while True:
         q = input("\nAsk: ").strip()
         if q.lower() in {"exit", "quit"}:
             break
-        #answer = vn.ask(question=q, visualize=False)
-        answer = vn.ask_agent(question=q)
+        if not USE_AGENT:
+            answer = vn.ask(question=q, visualize=False)
+        elif USE_AGENT:
+            answer = vn.ask_agent(question=q)
         print(answer)
 
 
