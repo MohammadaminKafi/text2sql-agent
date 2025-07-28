@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, Iterable, List, Tuple
 import json
 
 EXPECTED_KEYS = {"well-explained", "poorly-explained", "underspecified"}
@@ -24,12 +24,19 @@ def prompt_pattern(language: str) -> str:
     return f"{language}_prompt*.json"
 
 
-def collect_tests(dataset_dir: Path, language: str = "en") -> Dict[str, List[Tuple[Path, Path, Dict[str, str]]]]:
+def collect_tests(
+    dataset_dir: Path,
+    language: str = "en",
+    categories: Iterable[str] | None = None,
+) -> Dict[str, List[Tuple[Path, Path, Dict[str, str]]]]:
     """Collect query/prompt pairs grouped by category."""
+
     tests: Dict[str, List[Tuple[Path, Path, Dict[str, str]]]] = {}
     pattern = prompt_pattern(language)
 
     for category in sorted(p.name for p in dataset_dir.iterdir() if p.is_dir()):
+        if categories is not None and category not in categories:
+            continue
         cat_dir = dataset_dir / category
         queries = sorted(cat_dir.glob("query*.sql"))
         prompts = sorted(cat_dir.glob(pattern))

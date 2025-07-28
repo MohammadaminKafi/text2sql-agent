@@ -108,6 +108,12 @@ def parse_args() -> argparse.Namespace:
             "<lang>_promptXX.json naming convention."
         ),
     )
+    parser.add_argument(
+        "--categories",
+        nargs="+",
+        default=None,
+        help="Specific test categories to run. Defaults to all except 'misc'",
+    )
     return parser.parse_args()
 
 
@@ -158,6 +164,12 @@ def main() -> None:
     log_dir = args.log_dir
     log_dir.mkdir(exist_ok=True)
 
+    all_categories = sorted(p.name for p in dataset_dir.iterdir() if p.is_dir())
+    categories = args.categories or [c for c in all_categories if c != "misc"]
+    unknown = set(categories) - set(all_categories)
+    if unknown:
+        raise ValueError(f"Unknown categories: {', '.join(sorted(unknown))}")
+
     openai_cfg = {"api_key": API_KEY}
     verify_dataset(dataset_dir, args.languages)
 
@@ -183,7 +195,7 @@ def main() -> None:
 
     for language in args.languages:
         print(f"\nRunning language: {language}")
-        all_tests = collect_tests(dataset_dir, language=language)
+        all_tests = collect_tests(dataset_dir, language=language, categories=categories)
         total = sum(len(v) for v in all_tests.values())
         print(f"Number of tests: {total}")
         lang_dir = model_dir / language
