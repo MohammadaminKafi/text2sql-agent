@@ -2685,7 +2685,7 @@ class VannaBase(ABC):
             "1. Translate the question to English if it's written in another language. Never ask user for clarification about the translation.\n"
             "2. Search the RAG for related tables and columns.\n"
             "3. Try to create a structured prompt that contains the exact filters, column names, groupings and orderings if required.\n"
-            "4. If the current structured prompt is ambigious (there is mismatch between names) try providing user with options to choose (if the ask_user tool is available).\n"
+            "4. If the current structured prompt is ambigious (there is mismatch between names) try providing user with options to choose.\n"
             "5. Plan a query and execute it using `run_sql`.\n"
             "6. Iterate until the results answer the question with confidence.\n"
             f"User question: {question}"
