@@ -1,6 +1,0 @@
-{
-  "well-explained": "Show products with inventory quantities lower than average, along with the total quantity sold and the maximum quantity sold for each product.",
-  "poorly-explained": "Get products with low stock and sales details.",
-  "underspecified": "Show inventory details.",
-  "follow-up": "Show items below average stock plus total and max sold."
-}

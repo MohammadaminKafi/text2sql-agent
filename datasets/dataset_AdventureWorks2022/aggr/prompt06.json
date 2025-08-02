@@ -1,6 +1,0 @@
-{
-  "well-explained": "Identify customers with more than 10 orders; for each, show their ID, number of orders, sum of subtotals, and highest total‑due order, sorted by subtotal descending.",
-  "poorly-explained": "Show customers who order a lot and their spending.",
-  "underspecified": "Show customer order aggregates.",
-  "follow-up": "Return customers with over ten orders and highlight the largest order."
-}

@@ -1,6 +1,0 @@
-{
-  "well-explained": "کارمندان فعلی (بدون تاریخ پایان همکاری) را همراه با شناسه، نام و دپارتمانشان با استفاده از جداول EmployeeDepartmentHistory، Department، Employee و Person فهرست کن.",
-  "poorly-explained": "چه کسی الان کجا کار می‌کند؟",
-  "underspecified": "دپارتمان‌های کارمندان را نشان بده.",
-  "follow-up": "کارمندان فعلی و دپارتمانشان را فهرست کن."
-}

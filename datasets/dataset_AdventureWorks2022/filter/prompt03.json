@@ -1,6 +1,0 @@
-{
-  "well-explained": "List vendors who have never had a purchase order with a total amount greater than 1000, showing their ID and name.",
-  "poorly-explained": "Get vendors who didn’t make big sales.",
-  "underspecified": "Show vendor list.",
-  "follow-up": "Select vendors without any purchase over 1000."
-}

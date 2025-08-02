@@ -1,6 +1,0 @@
-{
-  "well-explained": "List employee IDs, names, departments, shift names, and hire dates for all employees.",
-  "poorly-explained": "Tell me about employees and where they work.",
-  "underspecified": "Give me employee info.",
-  "follow-up": "Show department and shift for all employees."
-}

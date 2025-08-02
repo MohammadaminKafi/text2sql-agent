@@ -1,6 +1,0 @@
-{
-  "well-explained": "List the first and last names, job titles, and hire dates of employees who were hired before January 1st, 2015, and whose job title contains the word 'Manager'.",
-  "poorly-explained": "Show me who were managers before 2015.",
-  "underspecified": "Give me employee names and job titles.",
-  "follow-up": "Include managers hired before 2015."
-}

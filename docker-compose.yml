@@ -1,0 +1,31 @@
+networks:
+  vanna-net:
+
+services:
+  sqlserver:
+    build: ./sql_db            
+    container_name: sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: ${SA_PASSWORD}
+    ports:
+      - "1433:1433"
+    networks: [vanna-net]
+    healthcheck:
+      test: ["CMD", "/opt/mssql-tools/bin/sqlcmd", "-S", "localhost",
+             "-U", "sa", "-P", "${SA_PASSWORD}", "-Q", "SELECT 1"]
+      interval: 10s
+      retries: 10
+      start_period: 30s
+
+  # ------------------------------------------------ Flask / Vanna app
+  text2sql-app:
+    build: ./vanna_app
+    container_name: text2sql-app
+    env_file: .env
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    ports:
+      - "44488:44488"
+    networks: [vanna-net]

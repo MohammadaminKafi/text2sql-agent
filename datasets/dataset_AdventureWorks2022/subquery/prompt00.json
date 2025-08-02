@@ -1,6 +1,0 @@
-{
-  "well-explained": "Return every product whose list price is higher than the average for other products in the same subcategory. Show the product ID, name and list price.",
-  "poorly-explained": "Get the pricey products in each product group.",
-  "underspecified": "Show product names and prices.",
-  "follow-up": "Return ones priced above their subcategory average."
-}

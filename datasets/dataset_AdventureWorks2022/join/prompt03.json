@@ -1,6 +1,0 @@
-{
-  "well-explained": "Show the first and last names of people along with their street address, city, state/province name, and country name.",
-  "poorly-explained": "Give me names and addresses of people.",
-  "underspecified": "List people and where they live.",
-  "follow-up": "Show street, city, state and country for each person."
-}

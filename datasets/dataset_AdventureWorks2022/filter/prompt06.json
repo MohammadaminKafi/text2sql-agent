@@ -1,6 +1,0 @@
-{
-  "well-explained": "Find salespeople who have processed orders where the total due is greater than 1000. Show their business entity ID, first name, and last name.",
-  "poorly-explained": "Get salespeople with high-value orders.",
-  "underspecified": "List salespeople.",
-  "follow-up": "Keep salespeople involved in orders over 1000."
-}

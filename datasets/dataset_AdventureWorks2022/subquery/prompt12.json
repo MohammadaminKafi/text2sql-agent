@@ -1,6 +1,0 @@
-{
-  "well-explained": "List salespersons who have made sales with total amounts over 500, showing their ID, name, total sales, and average sales amount.",
-  "poorly-explained": "Salespeople with big sales and their stats.",
-  "underspecified": "List salespeople.",
-  "follow-up": "Include salespeople with total sales over 500 and show averages."
-}

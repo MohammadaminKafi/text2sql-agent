@@ -1,6 +1,0 @@
-{
-  "well-explained": "Find products that is out of stock. Return the product ID and name.",
-  "poorly-explained": "Show products that are out of stock.",
-  "underspecified": "List products.",
-  "follow-up": "Find products whose inventory quantity equals zero."
-}

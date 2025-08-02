@@ -1,3 +1,0 @@
-# Example argument sets for run_dataset_batch.py
---model gpt-4o-mini --method ask_agent --level 1
---model gpt-4o --method ask --level 1 --languages en fa

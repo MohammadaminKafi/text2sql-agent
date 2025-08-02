@@ -1,6 +1,0 @@
-{
-  "well-explained": "List current employees (those without an EndDate) with their IDs, names, and department, using EmployeeDepartmentHistory, Department, Employee, and Person.",
-  "poorly-explained": "Who works where now?",
-  "underspecified": "Show employee departments.",
-  "follow-up": "List current employees and their departments."
-}
