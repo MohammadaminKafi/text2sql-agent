@@ -1174,7 +1174,7 @@ class VannaFlaskApp(VannaFlaskAPI):
         debug=True,
         allow_llm_to_see_data=False,
         logo="https://img.vanna.ai/vanna-flask.svg",
-        title="Welcome to Vanna.AI",
+        title="Welcome to IUT Text2SQL platform",
         subtitle="Your AI-powered copilot for SQL queries.",
         show_training_data=True,
         suggested_questions=True,
@@ -1237,7 +1237,10 @@ class VannaFlaskApp(VannaFlaskAPI):
         self.config["followup_questions"] = followup_questions
         self.config["summarization"] = summarization
         self.config["function_generation"] = function_generation and hasattr(vn, "get_function")
-        self.config["version"] = importlib.metadata.version('vanna')
+        try:
+            self.config["version"] = importlib.metadata.version('vanna')
+        except importlib.metadata.PackageNotFoundError:
+            self.config["version"] = "dev"  # fallback
 
         self.index_html_path = index_html_path
         self.assets_folder = assets_folder
@@ -1283,11 +1286,13 @@ class VannaFlaskApp(VannaFlaskAPI):
                     "transfer-encoding",
                     "connection",
                 ]
+
                 headers = [
                     (name, value)
                     for (name, value) in response.raw.headers.items()
                     if name.lower() not in excluded_headers
                 ]
+
                 return Response(response.content, response.status_code, headers)
             else:
                 return "Error fetching file from remote server", response.status_code
@@ -1299,4 +1304,5 @@ class VannaFlaskApp(VannaFlaskAPI):
                 directory = os.path.dirname(self.index_html_path)
                 filename = os.path.basename(self.index_html_path)
                 return send_from_directory(directory=directory, path=filename)
+            
             return html_content
