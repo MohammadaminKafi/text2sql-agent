@@ -50,6 +50,8 @@ def collect_tests(
 def verify_dataset(dataset_dir: Path, languages: List[str]) -> None:
     """Ensure all queries have prompt files for each language and valid keys."""
     for category in sorted(p.name for p in dataset_dir.iterdir() if p.is_dir()):
+        if category == "misc":
+            continue
         cat_dir = dataset_dir / category
         queries = sorted(cat_dir.glob("query*.sql"))
         for lang in languages:

@@ -1,12 +1,14 @@
 {
     "en": {
-        "sample0": "Show customers who have spent more than 5000 alongside with count of orders and total amount spent sorted by spending.",
-        "sample1": "Display customers who have made purchases totaling more than 5000, including how many orders they placed and how much they spent in total, sorted by spending.",
-        "sample2": "Get a list of customers with total expenses above 5000, showing both the number of orders and the total they spent, ordered by the amount spent."
+        "sample0": "Show customers who have spent more than 197452 alongside with count of orders and total amount spent sorted by spending.",
+        "sample1": "Display customers who have made purchases totaling more than 197452, including how many orders they placed and how much they spent in total, sorted by spending.",
+        "sample2": "Get a list of customers with total expenses above 197452, showing both the number of orders and the total they spent, ordered by the amount spent.",
+        "sample3": "Give me the list of customers whose spendings exceed one hundred ninety-seven thousand four hundred fifty-two, along with the count of their orders and the total amount spent."
     },
     "fa": {
-        "sample0": "مشتریانی را نشان بده که بیش از ۵۰۰۰ خرج کرده‌اند، همراه با تعداد سفارش‌ها و مجموع مبلغ خرج‌شده، مرتب‌شده بر اساس میزان خرج.",
-        "sample1": "فهرستی از مشتریانی تهیه کن که مجموع هزینه آن‌ها بالای ۵۰۰۰ بوده، شامل تعداد سفارش‌ها و کل مبلغ خرج‌شده، مرتب‌شده بر اساس میزان هزینه.",
-        "sample2": "لیستی از مصرف‌کنندگانی تهیه کن که مجموع خرجی که آن‌ها کرده‌اند بالای ۵۰۰۰ بوده، شامل تعداد سفارش‌ها و کل مبلغ مصرف‌شده و بر اساس میزان خرج آن‌ها را مرتب کن.."
+        "sample0": "مشتریانی را نشان بده که بیش از ۱۹۷۴۵۲ خرج کرده‌اند، همراه با تعداد سفارش‌ها و مجموع مبلغ خرج‌شده، مرتب‌شده بر اساس میزان خرج.",
+        "sample1": "فهرستی از مشتریانی تهیه کن که مجموع هزینه آن‌ها بالای ۱۹۷۴۵۲ بوده، شامل تعداد سفارش‌ها و کل مبلغ خرج‌شده، مرتب‌شده بر اساس میزان هزینه.",
+        "sample2": "لیستی از مصرف‌کنندگانی تهیه کن که مجموع خرجی که آن‌ها کرده‌اند بالای ۱۹۷۴۵۲ بوده، شامل تعداد سفارش‌ها و کل مبلغ مصرف‌شده و بر اساس میزان خرج آن‌ها را مرتب کن.",
+        "sample3": "فهرست خریدارانی را بده که بیش از صد و نود و هفت هزار و چهارصد و پنجاه و دو خرید کرده‌اند. همچنین تعداد خریدها و مجموع خرید آن‌ها را نمایش بده."
     }
 }

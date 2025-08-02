@@ -10,7 +10,7 @@ from no_commit_utils.credentials_utils import read_avalai_api_key
 
 os.environ["CHROMA_CACHE_DIR"] = "./cache/chroma_cache"
 
-MODEL = "gemma-3-27b-it" # "gpt-4o-mini"
+MODEL = "gpt-4o-mini" # "gemma-3-27b-it" 
 BASE_API = "https://api.avalapis.ir/v1" #"https://api.avalai.ir/v1"
 API_KEY = read_avalai_api_key()
 

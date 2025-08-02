@@ -2678,7 +2678,7 @@ class VannaBase(ABC):
 
         prompt = (
             "You are a T-SQL / Microsoft SQL Server expert. "
-            "If asking the use for more information, always ask in the same language as user has asked the question"
+            "If asking the user for more information, always ask in the same language as user has asked the question"
             "Use the tools below to reason your way to the best answer.\n"
             f"{tools_section}"
             "Guidelines:\n"
