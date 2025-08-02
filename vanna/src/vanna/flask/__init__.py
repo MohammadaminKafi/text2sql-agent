@@ -1118,34 +1118,6 @@ class VannaFlaskAPI:
                 }
             )
 
-        @self.flask_app.route("/api/v0/ask_question", methods=["POST"])
-        @self.requires_auth
-        def ask_question(user: any):
-            data = flask.request.get_json(force=True)
-            question = data.get("question")
-            method = data.get("method", "ask_agent")
-            if not question:
-                return jsonify({"type": "error", "error": "No question provided"})
-
-            if method == "ask":
-                sql, df, _ = vn.ask(question=question, print_results=False)
-            else:
-                sql, df, _ = vn.ask_agent(question=question, print_results=False)
-
-            id = self.cache.generate_id(question=question)
-            self.cache.set(id=id, field="question", value=question)
-            self.cache.set(id=id, field="sql", value=sql)
-            self.cache.set(id=id, field="df", value=df)
-
-            return jsonify(
-                {
-                    "type": "answer",
-                    "id": id,
-                    "sql": sql,
-                    "df": df.head(10).to_json(orient="records", date_format="iso") if df is not None else None,
-                }
-            )
-
         @self.flask_app.route("/api/v0/<path:catch_all>", methods=["GET", "POST"])
         def catch_all(catch_all):
             return jsonify(
@@ -1265,11 +1237,7 @@ class VannaFlaskApp(VannaFlaskAPI):
         self.config["followup_questions"] = followup_questions
         self.config["summarization"] = summarization
         self.config["function_generation"] = function_generation and hasattr(vn, "get_function")
-        try:
-            self.config["version"] = importlib.metadata.version('vanna')
-        except importlib.metadata.PackageNotFoundError:
-            # Fallback when running from source without package metadata
-            self.config["version"] = "source"
+        self.config["version"] = importlib.metadata.version('vanna')
 
         self.index_html_path = index_html_path
         self.assets_folder = assets_folder
