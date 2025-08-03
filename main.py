@@ -5,14 +5,14 @@ from vanna.src.vanna.openai.openai_chat import OpenAI_Chat
 from vanna.src.vanna.base.base import VannaBase
 from vanna.src.vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
 
-from no_commit_utils.credentials_utils import read_avalai_api_key
+from no_commit_utils.credentials_utils import read_credentials
 
 
 os.environ["CHROMA_CACHE_DIR"] = "./cache/chroma_cache"
 
 MODEL = "gpt-4o-mini" # "gemma-3-27b-it" 
 BASE_API = "https://api.avalapis.ir/v1" #"https://api.avalai.ir/v1"
-API_KEY = read_avalai_api_key()
+API_KEY = read_credentials("avalai.key")
 
 USE_AGENT = True
 

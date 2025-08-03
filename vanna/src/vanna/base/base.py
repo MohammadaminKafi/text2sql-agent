@@ -48,13 +48,13 @@ flowchart
 
 """
 
-from no_commit_utils.credentials_utils import read_avalai_api_key, read_langsmith_api_key, read_metis_api_key
+from no_commit_utils.credentials_utils import read_credentials
 
 # Enviromental Variables
 import os
 # os.environ["LANGSMITH_TRACING"] = "true"
 # os.environ["LANGSMITH_ENDPOINT"] = "https://api.smith.langchain.com"
-# os.environ["LANGSMITH_API_KEY"] = read_langsmith_api_key()
+# os.environ["LANGSMITH_API_KEY"] = read_credentials("langsmith.key")
 # os.environ["LANGSMITH_PROJECT"] = "react-sql"
 
 import json
@@ -2434,7 +2434,7 @@ class VannaBase(ABC):
             model = "gpt-4o-mini",
             model_provider = "openai",
             api_base = "https://api.metisai.ir/openai/v1",
-            api_key = read_metis_api_key(),
+            api_key = read_credentials("metis.key"),
             agent_toolkit: list = ["run_sql", "ask_user", "query_rag"],
     ):
         self.create_new_thread(thread_type="agent-init")
