@@ -80,7 +80,11 @@ from langchain.chat_models import init_chat_model
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 from langchain_core.tools import StructuredTool
-from pydantic import Field, BaseModel as PydanticBaseModelForTool
+from agent_utils import QueryArgs, AskUserArgs, ShamsiDateArgs, QueryRAGArgs
+
+# Hierarchy agent imports
+import dspy
+# from hierarchy_agent_utils import ...
 
 # Local imports
 from ..exceptions import DependencyError, ImproperlyConfigured, ValidationError
@@ -1962,15 +1966,6 @@ class VannaBase(ABC):
         self.agent_last_sql = None
         self.agent_last_df = None
 
-        # doc_list = self.get_related_documentation(question)
-
-        # prompt_content = (
-        #     "You are a T-SQL / Microsoft SQL Server expert. Please help to generate a SQL query to answer the question. "
-        #     "You are provided with a tool for querying the AdventureWorks2022 database. The tool name is \"run_sql\".\n"
-        #     f"You are provided with the description of related tables retrieved from RAG:\n{'\n\n'.join(doc_list)}\n"
-        #     f"The question is: {question}"
-        # )
-
         prompt_content = self._build_agent_prompt(question)
 
         self.log(message=f"Prompt:\n{prompt_content}", title="Prompt")
@@ -1999,6 +1994,9 @@ class VannaBase(ABC):
                 print(df)
 
         return sql, df, fig
+
+    def ask_hierarchy_agent():
+        pass
 
     def train(
         self,
@@ -2692,15 +2690,37 @@ class VannaBase(ABC):
         )
         return prompt
 
-class QueryArgs(PydanticBaseModelForTool):
-    query: str = Field(..., description="SQL query to be executed")
+    # ---------- Hierarchy Agent Helper Methods
+    def create_dspy_lm(
+            model: str = "openai/gpt-4o-mini",
+            api_key: str = read_credentials("avalai.key"),
+            api_base: str = "https://api.avalapis.ir/v1",
+            timeout: int = 5 
+    ):
+        if not model:
+            raise ValueError("`model` must be a non-empty string.")
+        if not api_key:
+            raise ValueError("`api_key` is empty after attempting to load credentials.")
+        if not api_base:
+            raise ValidationError("`api_base` must be a valid endpoint.")
+            
+        parsed_url = urlparse(api_base)
+        if not (parsed_url.scheme and parsed_url.netloc):
+            raise ValueError(f"`api_base` does not look like a valid URL: {api_base!r}")
 
-class AskUserArgs(PydanticBaseModelForTool):
-    question: str = Field(..., description="Question to ask user for more clarification")
+        try:
+            lm = dspy.LM(model, api_key=api_key, api_base=api_base)
+        except Exception:
+            lm = None
 
-class QueryRAGArgs(PydanticBaseModelForTool):
-    query: str = Field(..., description="Query to find similarities from vector database")
-    count: int = Field(..., description="Number of similar vectors to retreive from vector database")
+        # TODO
+        try:
+            lm("Say this is a test!", temperature=1.0)
+        except:
+            pass
 
-class ShamsiDateArgs(PydanticBaseModelForTool):
-    date: str = Field(..., description="Date in Shamsi (Jalali) calendar")
+        return lm
+
+
+if __name__ == "__main__":
+    pass
