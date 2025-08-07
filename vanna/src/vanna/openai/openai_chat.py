@@ -67,7 +67,10 @@ class OpenAI_Chat(VannaBase):
 
         if kwargs.get("model", None) is not None:
             model = kwargs.get("model", None)
-            self.log(message=f"Using model {model} for {num_tokens} tokens (approx)", title="Model usage")
+            self.log(
+                message=f"Using model {model} for {num_tokens} tokens (approx)",
+                title="Model usage",
+            )
 
             response = self.client.chat.completions.create(
                 model=model,
@@ -77,7 +80,10 @@ class OpenAI_Chat(VannaBase):
             )
         elif kwargs.get("engine", None) is not None:
             engine = kwargs.get("engine", None)
-            self.log(message=f"Using model {engine} for {num_tokens} tokens (approx)", title="Engine usage")
+            self.log(
+                message=f"Using model {engine} for {num_tokens} tokens (approx)",
+                title="Engine usage",
+            )
 
             response = self.client.chat.completions.create(
                 engine=engine,
@@ -94,7 +100,11 @@ class OpenAI_Chat(VannaBase):
         #         temperature=self.temperature,
         #     )
         elif self.config is not None and "engine" in self.config:
-            self.log(message=f"Using model {self.config['engine']} for {num_tokens} tokens (approx)", title="Engine usage", echo=False)
+            self.log(
+                message=f"Using model {self.config['engine']} for {num_tokens} tokens (approx)",
+                title="Engine usage",
+                echo=False,
+            )
 
             response = self.client.chat.completions.create(
                 engine=self.config["engine"],
@@ -103,7 +113,11 @@ class OpenAI_Chat(VannaBase):
                 temperature=self.temperature,
             )
         elif self.config is not None and "model" in self.config:
-            self.log(message=f"Using model {self.config["model"]} for {num_tokens} tokens (approx)", title="Model usage", echo=False)
+            self.log(
+                message=f"Using model {self.config["model"]} for {num_tokens} tokens (approx)",
+                title="Model usage",
+                echo=False,
+            )
             response = self.client.chat.completions.create(
                 model=self.config["model"],
                 messages=prompt,
@@ -116,7 +130,11 @@ class OpenAI_Chat(VannaBase):
             else:
                 model = "gpt-3.5-turbo"
 
-            self.log(message=f"Using model {model} for {num_tokens} tokens (approx)", title="Model usage", echo=False)
+            self.log(
+                message=f"Using model {model} for {num_tokens} tokens (approx)",
+                title="Model usage",
+                echo=False,
+            )
 
             response = self.client.chat.completions.create(
                 model=model,

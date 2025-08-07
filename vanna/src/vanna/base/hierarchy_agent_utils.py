@@ -1,37 +1,45 @@
 import json
-import re
-import sqlparse
 import logging
-from collections import defaultdict
-from typing import List, Tuple, Optional, Dict, Any
-
-import pandas as pd
-import sqlalchemy as sa
-from sqlalchemy import inspect, create_engine
+import re
 import urllib.parse
+from collections import defaultdict
+from typing import Any, Dict, List, Optional, Tuple
 
 import dspy
-from dspy import InputField, OutputField, Signature, Module, Predict, ChainOfThought, ProgramOfThought
+import pandas as pd
+import sqlalchemy as sa
+import sqlparse
+from dspy import (ChainOfThought, InputField, Module, OutputField, Predict,
+                  ProgramOfThought, Signature)
+from sqlalchemy import create_engine, inspect
 
 # ─────────────────────────────  LOGGING SETUP  ───────────────────────────── #
 LOG_FORMAT = "%(asctime)s  [%(levelname)s]  %(name)s › %(message)s"
 logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT, datefmt="%H:%M:%S")
 
+
 class TruncateLongMsgs(logging.Filter):
     def __init__(self, max_len: int = 300):
         super().__init__()
         self.max_len = max_len
+
     def filter(self, record: logging.LogRecord) -> bool:
         if len(record.getMessage()) > self.max_len:
             record.msg = record.getMessage()[: self.max_len] + " …(truncated)"
         return True
 
+
 logging.getLogger().addFilter(TruncateLongMsgs(100))
 
 # Silence chatty third-party loggers
 NOISY = (
-    "LiteLLM", "litellm", "httpx", "urllib3", "httpcore",               
-    "openai", "openai._base_client",
+    "LiteLLM",
+    "litellm",
+    "httpx",
+    "urllib3",
+    "httpcore",
+    "openai",
+    "openai._base_client",
 )
 for name in NOISY:
     logging.getLogger(name).setLevel(logging.WARNING)
@@ -42,9 +50,8 @@ logger.debug("🚀 Logging initialised (level=DEBUG)")
 
 # ──────────────────────────  Utility helpers  ────────────────────────────── #
 
-def list_schemas(
-        engine: sa.Engine
-    ) -> List[str]:
+
+def list_schemas(engine: sa.Engine) -> List[str]:
     logger.debug("🔍 list_schemas: inspecting database for schema names")
     inspector = inspect(engine)
     schemas = inspector.get_schema_names()
@@ -52,10 +59,7 @@ def list_schemas(
     return schemas
 
 
-def list_tables(
-        engine: sa.Engine, 
-        schema: str
-    ) -> List[str]:
+def list_tables(engine: sa.Engine, schema: str) -> List[str]:
     logger.debug("🔍 list_tables: schema=%s", schema)
     inspector = inspect(engine)
     tables = inspector.get_table_names(schema=schema)
@@ -63,11 +67,7 @@ def list_tables(
     return tables
 
 
-def list_columns(
-    engine,
-    schema: str,
-    table: str
-) -> List[Tuple[str, str]]:
+def list_columns(engine, schema: str, table: str) -> List[Tuple[str, str]]:
     logger.debug("🔍 list_columns: %s.%s", schema, table)
 
     inspector = inspect(engine)
@@ -81,9 +81,9 @@ def list_columns(
 
 
 def get_pk_fk_pairs(
-        engine: sa.Engine,
-        tables: List[Tuple[str, str]],
-    ) -> List[Tuple[str, str, str]]:
+    engine: sa.Engine,
+    tables: List[Tuple[str, str]],
+) -> List[Tuple[str, str, str]]:
     """
     Return (child_table, parent_table, constraint_name) triples for every
     FK that originates in tables.
@@ -100,9 +100,9 @@ def get_pk_fk_pairs(
         for fk in fk_list:
             src_fq = f"{schema}.{table}"
             tgt_schema = fk.get("referred_schema") or schema
-            tgt_table  = fk["referred_table"]
-            tgt_fq     = f"{tgt_schema}.{tgt_table}"
-            cname      = fk.get("name", "")
+            tgt_table = fk["referred_table"]
+            tgt_fq = f"{tgt_schema}.{tgt_table}"
+            cname = fk.get("name", "")
 
             # Skip self-references
             if src_fq.lower() == tgt_fq.lower():
@@ -112,7 +112,9 @@ def get_pk_fk_pairs(
             logger.debug("      🔗 %s → %s  (constraint=%s)", src_fq, tgt_fq, cname)
 
     # ── de-duplicate (same edge can appear twice) ─────────────────────
-    dedup = list({(a.lower(), b.lower(), c): (a, b, c) for a, b, c in relations}.values())
+    dedup = list(
+        {(a.lower(), b.lower(), c): (a, b, c) for a, b, c in relations}.values()
+    )
 
     logger.debug("🔍 get_pk_fk_pairs: discovered %s relation(s)", len(dedup))
     return dedup
@@ -122,11 +124,11 @@ def extract_sql(llm_response: str) -> str:
     logger.debug("🧹 extract_sql: received %s chars", len(llm_response))
 
     patterns: List[tuple[str, str]] = [
-        (r"\bCREATE\s+TABLE\b.*?\bAS\b.*?;",         "CREATE TABLE AS"),
-        (r"\bWITH\b .*?;",                           "WITH / CTE"),
-        (r"\bSELECT\b .*?;",                         "SELECT"),
-        (r"```sql\s*\n(.*?)```",                     "```sql fenced"),
-        (r"```(.*?)```",                            "generic fenced"),
+        (r"\bCREATE\s+TABLE\b.*?\bAS\b.*?;", "CREATE TABLE AS"),
+        (r"\bWITH\b .*?;", "WITH / CTE"),
+        (r"\bSELECT\b .*?;", "SELECT"),
+        (r"```sql\s*\n(.*?)```", "```sql fenced"),
+        (r"```(.*?)```", "generic fenced"),
     ]
 
     for pat, label in patterns:
@@ -150,15 +152,13 @@ def is_sql_valid(sql: str) -> bool:
     return False
 
 
-def execute_query(
-        engine: sa.Engine, 
-        query: str
-    ) -> pd.DataFrame:
+def execute_query(engine: sa.Engine, query: str) -> pd.DataFrame:
     logger.info("🪄 execute_query: %s", query.replace("\n", " "))
     with engine.connect() as conn:
         df = pd.read_sql(query, conn)
     logger.info("🪄 execute_query: returned %s rows × %s cols", *df.shape)
     return df
+
 
 _PRESET_ANSWERS = [
     "Yes",
@@ -169,6 +169,7 @@ _PRESET_ANSWERS = [
     "Absolutely!",
     "Absolutely not",
 ]
+
 
 def ask_user(question: str) -> str:
     """
@@ -184,7 +185,7 @@ def ask_user(question: str) -> str:
     # Show the preset menu
     for idx, ans in enumerate(_PRESET_ANSWERS, start=1):
         print(f"[{idx}] {ans}")
-    print("[0] Other…")          # sentinel for custom input
+    print("[0] Other…")  # sentinel for custom input
 
     # Keep asking until we get a valid response
     while True:
@@ -206,24 +207,25 @@ def ask_user(question: str) -> str:
 
         # Anything else is invalid ⇒ loop again
         print("Invalid selection. Try again.")
+
+
 # ───────────────────────────  DSPy Tools  ────────────────────────────────── #
 
 interact_user = dspy.Tool(
     func=ask_user,
     name="ask_user",
-    desc="Ask the human-in-the-loop a question for more clarification and return the answer."
+    desc="Ask the human-in-the-loop a question for more clarification and return the answer.",
 )
 
 # ───────────────────────────  DSPy Signatures  ───────────────────────────── #
+
 
 class TranslatePromptSig(Signature):
     """
     If the user prompt is not in English, translate it; otherwise return it unchanged.
     """
 
-    user_prompt: str = InputField(
-        desc="Original user prompt in any language"
-    )
+    user_prompt: str = InputField(desc="Original user prompt in any language")
     english_prompt: str = OutputField(
         desc="Prompt translated to English, or the original text if already English"
     )
@@ -236,14 +238,14 @@ class SqlReadyPromptSig(Signature):
     stage what to build—without actually writing SQL.
 
     Requirements for `sql_ready_prompt`:
-    - Clearly list the *measures or columns* to return.  
-      – Prefer readable column labels over SQL snippets  
+    - Clearly list the *measures or columns* to return.
+      – Prefer readable column labels over SQL snippets
       – e.g. “year (order_date)”, “shipped order count”, “total revenue”
 
-    - Spell out any *filters* in plain words (“status is shipped”,  
+    - Spell out any *filters* in plain words (“status is shipped”,
       “order date between 2021-01-01 and 2021-12-31”).
 
-    - State grouping or aggregation intent (“group by year”,  
+    - State grouping or aggregation intent (“group by year”,
       “sum revenue per customer”).
 
     - Mention *ordering / limits* if relevant (“order by year ascending”).
@@ -266,11 +268,11 @@ class SqlReadyPromptSig(Signature):
 class DetectAmbiguitySig(Signature):
     """
     Examine the SQL-ready prompt and flag only material ambiguities
-    (omit nit-picking).  
+    (omit nit-picking).
 
-    Examples of ambiguities to catch  
-    • “recent years” without saying which years are considered recent → ask: “Where to start recent years?”  
-    • “top customers” without a count → ask: “How many top customers do you want?”  
+    Examples of ambiguities to catch
+    • “recent years” without saying which years are considered recent → ask: “Where to start recent years?”
+    • “top customers” without a count → ask: “How many top customers do you want?”
     """
 
     sql_ready_prompt: str = InputField()
@@ -298,18 +300,14 @@ class ClarifyPromptSig(Signature):
 
 class ExtractKeywordsSig(Signature):
     """
-    From an English prompt, pull only the field-like keywords that correspond to potential table or column names; 
+    From an English prompt, pull only the field-like keywords that correspond to potential table or column names;
     ignore literal filter values, numbers, date-like, calender-like, time-like and aggregation verbs.
       e.g.  'total sales by region in 2024 by month'  →  ['sales', 'region']
     Then rank them by importance and usefulness and only retuned up to `max_keywords` of them
     """
 
-    sql_prompt: str = InputField(
-        desc="SQL-ready prompt"
-    )
-    max_keywords: int = InputField(
-        desc="Maximum number of keywords to return"
-    )
+    sql_prompt: str = InputField(desc="SQL-ready prompt")
+    max_keywords: int = InputField(desc="Maximum number of keywords to return")
     keywords: List[str] = OutputField(
         desc="List of bare nouns / entities likely matching DB fields"
     )
@@ -321,15 +319,11 @@ class KeywordSchemaSig(Signature):
     Sort them by relevancy and usefulness and return up to `max_chosen_schemas`.
     """
 
-    keyword: str = InputField(
-        desc="Single keyword we want to satisfy"
-    )
+    keyword: str = InputField(desc="Single keyword we want to satisfy")
     db_schemas: List[str] = InputField(
         desc="All schema names that exist in the database"
     )
-    max_chosen_schemas: int = InputField(
-        desc="Maximum number of schemas to return"
-    )
+    max_chosen_schemas: int = InputField(desc="Maximum number of schemas to return")
     related_schemas: List[str] = OutputField(
         desc="Schemas related to the keyword (no commentary)"
     )
@@ -341,15 +335,9 @@ class KeywordTableSig(Signature):
     Sort them by relevancy and usefulness and return up to `max_chosen_tables`.
     """
 
-    keyword: str = InputField(
-        desc="Single keyword we want to satisfy"
-    )
-    schema_table_names: str = InputField(
-        desc="Tbale names of the schema inspected"
-    )
-    max_chosen_tables: int = InputField(
-        desc="Maximum number of tables to return"
-    )
+    keyword: str = InputField(desc="Single keyword we want to satisfy")
+    schema_table_names: str = InputField(desc="Tbale names of the schema inspected")
+    max_chosen_tables: int = InputField(desc="Maximum number of tables to return")
     related_tables: List[str] = OutputField(
         desc="Tables related to the keyword (no commentary)"
     )
@@ -363,12 +351,8 @@ class TableColumnSig(Signature):
     columns for “amount”, date columns for “year”, etc.).
     """
 
-    sql_prompt: str = InputField(
-        desc="Natural-language question we want to satisfy"
-    )
-    schema_name: str = InputField(
-        desc="Schema that owns the table"
-    )
+    sql_prompt: str = InputField(desc="Natural-language question we want to satisfy")
+    schema_name: str = InputField(desc="Schema that owns the table")
     table_columns_info: List[Tuple[str, str]] = InputField(
         desc="List of (column_name, data_type) tuples for this table"
     )
@@ -376,25 +360,22 @@ class TableColumnSig(Signature):
         desc="Column names that best match the prompt (no commentary)"
     )
 
+
 # Disabled
 class FilterContextSig(Signature):
     """
     From the full column context pick only the tables/columns that matter
-    for this prompt. Keep any tables that may relate to the prompt or may 
+    for this prompt. Keep any tables that may relate to the prompt or may
     help generating a better query.
     """
 
-    user_prompt: str = InputField(
-        desc="End-user's natural-language request"
-    )
+    user_prompt: str = InputField(desc="End-user's natural-language request")
     table_columns_ctx: str = InputField(
         desc="JSON {schema: {table: [[col, dtype], …]}} from ColumnSelector"
     )
-    max_tables: int = InputField(
-        desc="Hard cap on the number of tables to keep"
-    )
-    filtered_table_columns: Dict[str, Dict[str, List[Tuple[str, str]]]] = (
-        OutputField(desc="Pruned column map")
+    max_tables: int = InputField(desc="Hard cap on the number of tables to keep")
+    filtered_table_columns: Dict[str, Dict[str, List[Tuple[str, str]]]] = OutputField(
+        desc="Pruned column map"
     )
 
 
@@ -406,15 +387,11 @@ class GenSqlSig(Signature):
     - Do NOT wrap in markdown fences.
     """
 
-    sql_prompt: str = InputField(
-        desc="SQL-ready instruction string"
-    )
+    sql_prompt: str = InputField(desc="SQL-ready instruction string")
     context: Dict[str, Any] = InputField(
         desc="Dict with schemas/tables/columns/relations"
     )
-    generated_sql: str = OutputField(
-        desc="Executable SQL text"
-    )
+    generated_sql: str = OutputField(desc="Executable SQL text")
 
 
 class EvaluateSig(Signature):
@@ -422,18 +399,12 @@ class EvaluateSig(Signature):
     Decide whether the dataframe answers the prompt.
     """
 
-    user_prompt: str = InputField(
-        desc="Original user prompt"
-    )
-    sql_prompt: str = InputField(
-        desc="SQL-ready instruction string"
-    )
+    user_prompt: str = InputField(desc="Original user prompt")
+    sql_prompt: str = InputField(desc="SQL-ready instruction string")
     dataframe_json: str = InputField(
         desc="Small JSON sample (≈5 rows) of the query result"
     )
-    verdict: str = OutputField(
-        desc="'VALID' or 'INVALID'"
-    )
+    verdict: str = OutputField(desc="'VALID' or 'INVALID'")
     cause: str = OutputField(
         desc="Short explanation when verdict is INVALID; empty otherwise"
     )
@@ -445,18 +416,10 @@ class RefineSqlSig(Signature):
     Keep the same tables when possible; fix only what is necessary.
     """
 
-    sql_prompt: str = InputField(
-        desc="Original SQL-ready prompt"
-    )
-    last_sql: str = InputField(
-        desc="Previous (failing) SQL query"
-    )
-    cause: str = InputField(
-        desc="Why the query was judged INVALID"
-    )
-    improved_sql: str = OutputField(
-        desc="Corrected SQL query"
-    )
+    sql_prompt: str = InputField(desc="Original SQL-ready prompt")
+    last_sql: str = InputField(desc="Previous (failing) SQL query")
+    cause: str = InputField(desc="Why the query was judged INVALID")
+    improved_sql: str = OutputField(desc="Corrected SQL query")
 
 
 class ReportSig(Signature):
@@ -470,48 +433,51 @@ class ReportSig(Signature):
       • No markdown fences; return bare SQL.
     """
 
-    user_prompt: str = InputField(
-        desc="Original user prompt"
-    )
-    sql_prompt: str = InputField(
-        desc="Cleaned prompt used for SQL generation"
-    )
-    generated_sql: str = InputField(
-        desc="Previously validated SQL query"
-    )
+    user_prompt: str = InputField(desc="Original user prompt")
+    sql_prompt: str = InputField(desc="Cleaned prompt used for SQL generation")
+    generated_sql: str = InputField(desc="Previously validated SQL query")
     readable_sql: str = OutputField(
         desc="Human-readable SQL with friendly column names, joins, ordering"
     )
     report: str = OutputField(
         desc="1-2 sentence description of what the resulting dataframe contains, "
-             "phrased for the end user"
+        "phrased for the end user"
     )
 
 
 # ────────────────────────────  DSPy Modules  ─────────────────────────────── #
 
+
 class TranslatePrompt(Module):
     """Translate to English (or passthrough)."""
+
     def __init__(self):
         super().__init__()
         self.pred = Predict(TranslatePromptSig)
 
     def forward(self, user_prompt: str) -> str:
         out = self.pred(user_prompt=user_prompt)
-        logger.debug("🌐 TranslatePrompt: %s→%s chars", len(user_prompt), len(out.english_prompt))
+        logger.debug(
+            "🌐 TranslatePrompt: %s→%s chars", len(user_prompt), len(out.english_prompt)
+        )
         logger.debug("📜 Translated prompt:\n%s\n", out.english_prompt)
         return out.english_prompt
 
 
 class SqlPromptCleaner(Module):
     """Produce a crisp SQL-ready instruction string."""
+
     def __init__(self):
         super().__init__()
         self.pred = Predict(SqlReadyPromptSig)
 
     def forward(self, english_prompt: str) -> str:
         out = self.pred(user_prompt=english_prompt)
-        logger.debug("🧹 SqlPromptCleaner: %s→%s chars", len(english_prompt), len(out.sql_ready_prompt))
+        logger.debug(
+            "🧹 SqlPromptCleaner: %s→%s chars",
+            len(english_prompt),
+            len(out.sql_ready_prompt),
+        )
         logger.debug("⚙️ SQL-ready prompt:\n%s\n", out.sql_ready_prompt)
         return out.sql_ready_prompt
 
@@ -528,6 +494,7 @@ class AmbiguityResolver(Module):
         "answers":   [answer_1,   answer_2,   ...]          # same order
     }
     """
+
     def __init__(self):
         super().__init__()
         self.detect = Predict(DetectAmbiguitySig)
@@ -542,7 +509,9 @@ class AmbiguityResolver(Module):
 
         # Ask the user for each clarification ─────────────────────
         questions, answers = [], []
-        logger.debug("🤔 AmbiguityResolver detected %s ambiguity(ies)", len(out.ambiguities))
+        logger.debug(
+            "🤔 AmbiguityResolver detected %s ambiguity(ies)", len(out.ambiguities)
+        )
 
         for label, question in out.ambiguities.items():
             user_ans = ask_user(question)
@@ -574,10 +543,11 @@ class PromptClarifier(Module):
         logger.debug("✅ PromptClarifier produced %s chars", len(out.clarified_prompt))
         logger.debug("📝 Clarified prompt:\n%s\n", out.clarified_prompt)
         return out.clarified_prompt
-    
+
 
 class KeywordExtractor(Module):
     """Extract field-like keywords (ignore literal values)."""
+
     def __init__(self, max_keywords: int = 4):
         super().__init__()
         self.max_keywords = max_keywords
@@ -585,12 +555,17 @@ class KeywordExtractor(Module):
 
     def forward(self, sql_ready_prompt: str) -> List[str]:
         out = self.think(sql_prompt=sql_ready_prompt, max_keywords=self.max_keywords)
-        logger.debug("🔑 KeywordExtractor: %s keyword(s) → \n%s\n\n", len(out.keywords), ", ".join(out.keywords))
+        logger.debug(
+            "🔑 KeywordExtractor: %s keyword(s) → \n%s\n\n",
+            len(out.keywords),
+            ", ".join(out.keywords),
+        )
         return out.keywords
 
 
 class MatchSchemas(Module):
     """Map each keyword to its most relevant database schemas."""
+
     def __init__(self, engine: sa.Engine, max_schema_per_kw: int = 2):
         super().__init__()
         self.engine = engine
@@ -601,7 +576,9 @@ class MatchSchemas(Module):
         db_schemas = list_schemas(self.engine)
         logger.debug(
             "📥 MatchSchemas: %s keyword(s) %s | %s schema(s) in DB",
-            len(keywords), keywords, len(db_schemas)
+            len(keywords),
+            keywords,
+            len(db_schemas),
         )
 
         result: Dict[str, List[str]] = defaultdict(list)
@@ -614,19 +591,22 @@ class MatchSchemas(Module):
             )
 
             # parse the LLM output safely
-            schemas = (json.loads(out.related_schemas)
-                       if isinstance(out.related_schemas, str)
-                       else out.related_schemas)
+            schemas = (
+                json.loads(out.related_schemas)
+                if isinstance(out.related_schemas, str)
+                else out.related_schemas
+            )
 
             # keep only valid schemas and at most `max_schema_per_kw`
-            chosen = [s for s in schemas if s in db_schemas][:self.max_schema_per_kw]
+            chosen = [s for s in schemas if s in db_schemas][: self.max_schema_per_kw]
             result[kw].extend(chosen)
 
             logger.debug("   ↳ %s → %s", kw, chosen or "∅")
 
         logger.debug(
             "📤 MatchSchemas result: %s keyword(s) mapped, %s total schema refs",
-            len(result), sum(len(v) for v in result.values())
+            len(result),
+            sum(len(v) for v in result.values()),
         )
 
         return result
@@ -634,6 +614,7 @@ class MatchSchemas(Module):
 
 class MatchTables(Module):
     """Choose relevant tables for every (keyword, schema) pair that survived the previous stage."""
+
     def __init__(self, engine: sa.Engine, max_tbl_per_kw_schema: int = 4):
         super().__init__()
         self.max_tbl_per_kw_schema = max_tbl_per_kw_schema
@@ -644,7 +625,7 @@ class MatchTables(Module):
         logger.debug(
             "📥 MatchTables: %s keyword(s) → %s schema refs",
             len(schema_map),
-            sum(len(v) for v in schema_map.values())
+            sum(len(v) for v in schema_map.values()),
         )
 
         insp = inspect(self.engine)
@@ -655,16 +636,22 @@ class MatchTables(Module):
                 # candidate table list
                 all_tbls = insp.get_table_names(schema=schema)
                 logger.debug(
-                    "🔍 %s | %s: %s table candidates",
-                    kw, schema, len(all_tbls)
+                    "🔍 %s | %s: %s table candidates", kw, schema, len(all_tbls)
                 )
 
                 # ask the LLM to rank tables
                 tbl_json = json.dumps(all_tbls)
-                out = self.think(keyword=kw, schema_table_names=tbl_json, max_chosen_tables=self.max_tbl_per_kw_schema)
+                out = self.think(
+                    keyword=kw,
+                    schema_table_names=tbl_json,
+                    max_chosen_tables=self.max_tbl_per_kw_schema,
+                )
 
-                tbls = out.related_tables if not isinstance(out.related_tables, str) \
-                       else json.loads(out.related_tables)
+                tbls = (
+                    out.related_tables
+                    if not isinstance(out.related_tables, str)
+                    else json.loads(out.related_tables)
+                )
 
                 # keep unique order-preserving
                 fresh = [t for t in tbls if t not in result[schema]]
@@ -675,7 +662,9 @@ class MatchTables(Module):
         total_tbls = sum(len(v) for v in result.values())
         logger.debug(
             "📤 MatchTables result: %s schema(s), %s total table refs -> %s",
-            len(result), total_tbls, result
+            len(result),
+            total_tbls,
+            result,
         )
         return result
 
@@ -696,10 +685,11 @@ class ColumnSelector(Module):
     ------
     {schema: {table: [(col, dtype), …]}}
     """
+
     def __init__(self, engine: sa.Engine):
         super().__init__()
         self.engine = engine
-        self.pred   = Predict(TableColumnSig)
+        self.pred = Predict(TableColumnSig)
 
     def forward(
         self,
@@ -710,14 +700,17 @@ class ColumnSelector(Module):
         total_pairs = sum(len(tables) for tables in table_map.values())
         logger.debug(
             "📥 ColumnSelector: %s schema(s) → %s (schema,table) pairs",
-            len(table_map), total_pairs
+            len(table_map),
+            total_pairs,
         )
 
-        out_map: Dict[str, Dict[str, List[Tuple[str, str]]]] = defaultdict(lambda: defaultdict(list))
+        out_map: Dict[str, Dict[str, List[Tuple[str, str]]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
 
         for schema, tables in table_map.items():
             # ensure tables are unique per schema
-            for table in dict.fromkeys(tables):                 # preserves order, no dups
+            for table in dict.fromkeys(tables):  # preserves order, no dups
                 # 1) pull (name, dtype) pairs from the DB
                 col_pairs = list_columns(self.engine, schema, table)
 
@@ -727,9 +720,11 @@ class ColumnSelector(Module):
                     schema_name=schema,
                     table_columns_info=col_pairs,
                 )
-                col_names = (json.loads(o.related_columns)
-                             if isinstance(o.related_columns, str)
-                             else o.related_columns)
+                col_names = (
+                    json.loads(o.related_columns)
+                    if isinstance(o.related_columns, str)
+                    else o.related_columns
+                )
 
                 # 3) store unique column tuples, preserving order
                 dtype_map = {name: dtype for name, dtype in col_pairs}
@@ -737,9 +732,13 @@ class ColumnSelector(Module):
                     col_tuple = (name, dtype_map.get(name, "UNKNOWN"))
                     if col_tuple not in out_map[schema][table]:
                         out_map[schema][table].append(col_tuple)
-                        logger.debug("   ↳ %-18s → %s.%s.%s",
-                                     sql_prompt[:15] + ("…" if len(sql_prompt) > 15 else ""),
-                                     schema, table, col_tuple)
+                        logger.debug(
+                            "   ↳ %-18s → %s.%s.%s",
+                            sql_prompt[:15] + ("…" if len(sql_prompt) > 15 else ""),
+                            schema,
+                            table,
+                            col_tuple,
+                        )
 
         if out_map:
             logger.debug("📤 ColumnSelector result:")
@@ -752,9 +751,11 @@ class ColumnSelector(Module):
 
         return out_map
 
+
 # Disabled
 class ContextFilter(Module):
     """LLM chooses the minimum table subset needed for this prompt."""
+
     def __init__(self, max_tables: int = 12):
         super().__init__()
         self.max_tables = max_tables
@@ -774,18 +775,23 @@ class ContextFilter(Module):
             max_tables=self.max_tables,
         )
 
-        cols = (json.loads(out.filtered_table_columns)
-                if isinstance(out.filtered_table_columns, str)
-                else out.filtered_table_columns)
+        cols = (
+            json.loads(out.filtered_table_columns)
+            if isinstance(out.filtered_table_columns, str)
+            else out.filtered_table_columns
+        )
 
-        logger.debug("📤 ContextFilter kept %s table(s) in %s schema(s)",
-                     sum(len(tbls) for tbls in cols.values()),
-                     len(cols))
+        logger.debug(
+            "📤 ContextFilter kept %s table(s) in %s schema(s)",
+            sum(len(tbls) for tbls in cols.values()),
+            len(cols),
+        )
         return cols
 
 
 class GenerateSQL(Module):
     """Create first-draft SQL using only column and relation context."""
+
     def __init__(self):
         super().__init__()
         self.think = ChainOfThought(GenSqlSig)
@@ -797,7 +803,7 @@ class GenerateSQL(Module):
         relations: Dict[str, list],
     ) -> str:
         ctx = {
-            "columns":   table_columns,
+            "columns": table_columns,
             "relations": relations,
         }
         sql = self.think(sql_prompt=sql_prompt, context=ctx).generated_sql
@@ -807,15 +813,17 @@ class GenerateSQL(Module):
 
 class ValidateAndRepairSQL(Module):
     """Run, evaluate, and iteratively repair SQL until VALID."""
+
     def __init__(self, engine: sa.Engine, max_attempts: int = 5):
         super().__init__()
         self.engine = engine
         self.max_attempts = max_attempts
         self.evaluate = Predict(EvaluateSig)
-        self.refine   = Predict(RefineSqlSig)
+        self.refine = Predict(RefineSqlSig)
 
-    def forward(self, user_prompt: str, sql_prompt: str, sql: str
-               ) -> Tuple[pd.DataFrame, str]:
+    def forward(
+        self, user_prompt: str, sql_prompt: str, sql: str
+    ) -> Tuple[pd.DataFrame, str]:
         for attempt in range(1, self.max_attempts + 1):
             logger.info("🔄 Validate attempt %s/%s", attempt, self.max_attempts)
 
@@ -829,9 +837,11 @@ class ValidateAndRepairSQL(Module):
                     verdict, cause = "INVALID", f"Execution error: {exc}"
                 else:
                     sample = df.head(5).to_json()
-                    ev = self.evaluate(user_prompt=user_prompt,
-                                       sql_prompt=sql_prompt,
-                                       dataframe_json=sample)
+                    ev = self.evaluate(
+                        user_prompt=user_prompt,
+                        sql_prompt=sql_prompt,
+                        dataframe_json=sample,
+                    )
                     verdict, cause = ev.verdict.upper(), ev.cause or ""
 
             if verdict == "VALID":
@@ -839,31 +849,35 @@ class ValidateAndRepairSQL(Module):
                 return df, sql_clean
 
             logger.info("🔧 Refining (%s)", cause)
-            sql = self.refine(sql_prompt=sql_prompt,
-                              last_sql=sql_clean,
-                              cause=cause).improved_sql
+            sql = self.refine(
+                sql_prompt=sql_prompt, last_sql=sql_clean, cause=cause
+            ).improved_sql
 
         raise RuntimeError("Could not craft a valid SQL query.")
 
 
 class MakeReportQuery(Module):
     """Transform working SQL into human-readable report + summary."""
+
     def __init__(self):
         super().__init__()
         self.pred = Predict(ReportSig)
 
     def forward(self, user_prompt: str, sql_prompt: str, sql: str) -> Tuple[str, str]:
-        out = self.pred(user_prompt=user_prompt,
-                        sql_prompt=sql_prompt,
-                        generated_sql=sql)
+        out = self.pred(
+            user_prompt=user_prompt, sql_prompt=sql_prompt, generated_sql=sql
+        )
         human_sql = extract_sql(out.readable_sql)
-        summary   = out.report
+        summary = out.report
         return human_sql, summary
+
 
 # ───────────────────────────  Orchestrator  ──────────────────────────────
 
+
 class Text2SQLFlow(Module):
     """Full pipeline: NL → SQL → validated report."""
+
     def __init__(self, engine: sa.Engine, lm: dspy.LM):
         super().__init__()
         dspy.configure(lm=lm)
@@ -876,30 +890,32 @@ class Text2SQLFlow(Module):
         self.max_columns_per_table = 10
         self.max_sql_tables = 12
 
-        self.translate          = TranslatePrompt()
-        self.clean_prompt       = SqlPromptCleaner()
-        self.detect_ambiguity   = AmbiguityResolver()
-        self.clarify_prompt     = PromptClarifier()
-        self.keyword_stage      = KeywordExtractor(max_keywords=self.max_keywords)
-        self.match_schemas      = MatchSchemas(self.engine)
-        self.match_tables       = MatchTables(self.engine)
-        self.match_columns      = ColumnSelector(self.engine)
-        self.filter_ctx         = ContextFilter(max_tables=self.max_sql_tables)
-        self.gen_sql            = GenerateSQL()
-        self.validate           = ValidateAndRepairSQL(self.engine)
-        self.report             = MakeReportQuery()
+        self.translate = TranslatePrompt()
+        self.clean_prompt = SqlPromptCleaner()
+        self.detect_ambiguity = AmbiguityResolver()
+        self.clarify_prompt = PromptClarifier()
+        self.keyword_stage = KeywordExtractor(max_keywords=self.max_keywords)
+        self.match_schemas = MatchSchemas(self.engine)
+        self.match_tables = MatchTables(self.engine)
+        self.match_columns = ColumnSelector(self.engine)
+        self.filter_ctx = ContextFilter(max_tables=self.max_sql_tables)
+        self.gen_sql = GenerateSQL()
+        self.validate = ValidateAndRepairSQL(self.engine)
+        self.report = MakeReportQuery()
 
     def forward(self, user_prompt: str):
-        english_prompt   = self.translate(user_prompt)
+        english_prompt = self.translate(user_prompt)
         sql_ready = self.clean_prompt(english_prompt)
         ambiguity = self.detect_ambiguity(sql_ready)
         if ambiguity["questions"] is not None:
-            sql_ready = self.clarify_prompt(sql_ready, ambiguity["questions"], ambiguity["answers"])
-        keywords  = self.keyword_stage(sql_ready)
-        
+            sql_ready = self.clarify_prompt(
+                sql_ready, ambiguity["questions"], ambiguity["answers"]
+            )
+        keywords = self.keyword_stage(sql_ready)
+
         input()
         schema_map = self.match_schemas(keywords)
-        table_map  = self.match_tables(schema_map=schema_map)
+        table_map = self.match_tables(schema_map=schema_map)
         column_map = self.match_columns(sql_prompt=sql_ready, table_map=table_map)
 
         survived_tables: List[Tuple[str, str]] = [
@@ -912,22 +928,21 @@ class Text2SQLFlow(Module):
 
         input()
         sql_draft = self.gen_sql(
-            sql_prompt     = sql_ready,
-            table_columns  = column_map,
-            relations      = relations
+            sql_prompt=sql_ready, table_columns=column_map, relations=relations
         )
-        
-        input()
-        df, working_sql = self.validate(user_prompt=user_prompt,
-                                        sql_prompt=sql_ready,
-                                        sql=sql_draft)
 
         input()
-        readable_sql, summary = self.report(user_prompt=user_prompt,
-                                            sql_prompt=sql_ready,
-                                            sql=working_sql)
-        
+        df, working_sql = self.validate(
+            user_prompt=user_prompt, sql_prompt=sql_ready, sql=sql_draft
+        )
+
+        input()
+        readable_sql, summary = self.report(
+            user_prompt=user_prompt, sql_prompt=sql_ready, sql=working_sql
+        )
+
         return df, readable_sql, summary
+
 
 # ───────────────────  Convenience LM creator ─────────────────── #
 def create_dspy_lm(
@@ -935,8 +950,10 @@ def create_dspy_lm(
     api_key: str | None = None,
     api_base: str = "https://api.avalapis.ir/v1",
 ):
-    import requests
     from urllib.parse import urlparse
+
+    import requests
+
     from no_commit_utils.credentials_utils import read_credentials
 
     api_key = api_key or read_credentials("avalai.key")

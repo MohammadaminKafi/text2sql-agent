@@ -22,7 +22,7 @@ load_dotenv()
 #         def __init__(self, config=None):
 #             PG_VectorStore.__init__(self, config=config)
 #             OpenAI_Chat.__init__(self, config=config)
-    
+
 #     vn = VannaCustom(config={
 #         'api_key': os.environ['OPENAI_API_KEY'],
 #         'model': 'gpt-3.5-turbo',
@@ -37,7 +37,7 @@ load_dotenv()
 #     for ddl in df_ddl['sql'].to_list():
 #         vn.train(ddl=ddl)
 #     assert len(vn.get_related_ddl("dummy question")) == 10  # assume 10 DDL chunks are retrieved by default
-    
+
 #     question = "What are the top 7 customers by sales?"
 #     sql = vn.generate_sql(question)
 #     df = vn.run_sql(sql)
@@ -46,4 +46,3 @@ load_dotenv()
 #     # test if Vanna can generate an answer
 #     answer = vn.ask(question)
 #     assert answer is not None
-

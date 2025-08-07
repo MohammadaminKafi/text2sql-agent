@@ -1,24 +1,27 @@
 # ------------ vanna + chroma + AvalAI LLM ------------
 import os
+
 from openai import OpenAI
-from vanna.src.vanna.openai.openai_chat import OpenAI_Chat
-from vanna.src.vanna.base.base import VannaBase
-from vanna.src.vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
 
 from no_commit_utils.credentials_utils import read_credentials
-
+from vanna.src.vanna.base.base import VannaBase
+from vanna.src.vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
+from vanna.src.vanna.openai.openai_chat import OpenAI_Chat
 
 os.environ["CHROMA_CACHE_DIR"] = "./cache/chroma_cache"
 
-MODEL = "gpt-4o-mini" # "gemma-3-27b-it" 
-BASE_API = "https://api.avalapis.ir/v1" #"https://api.avalai.ir/v1"
+MODEL = "gpt-4o-mini"  # "gemma-3-27b-it"
+BASE_API = "https://api.avalapis.ir/v1"  # "https://api.avalai.ir/v1"
 API_KEY = read_credentials("avalai.key")
 
 USE_AGENT = True
 
+
 # ---- Compose with ChromaDB for the full Vanna client ---------------------
 class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
-    def __init__(self, openai_config : dict, llm_config: dict = {}, vdb_config: dict = {}):
+    def __init__(
+        self, openai_config: dict, llm_config: dict = {}, vdb_config: dict = {}
+    ):
         client = OpenAI(
             api_key=openai_config["api_key"],
             base_url=openai_config.get("base_url", BASE_API),
@@ -30,13 +33,11 @@ class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
 # ---- 3. Demo / entry-point ---------------------------------------------------
 def main() -> None:
     avalai_cfg = {
-        "api_key":  API_KEY,
+        "api_key": API_KEY,
         "base_url": BASE_API,
     }
 
-    llm_cfg = {
-        "model": MODEL
-    }
+    llm_cfg = {"model": MODEL}
 
     vn = MyVanna(openai_config=avalai_cfg, llm_config=llm_cfg)
     print("\n✅  Vanna configured successfully (AvalAI backend)\n")
@@ -45,7 +46,6 @@ def main() -> None:
         connection_test = vn.test_llm_connection()
         if connection_test == True:
             print("\n✅  Vanna is connected to an LLM\n")
-    
 
     # ---------- DB connection (Windows Auth) ----------
     conn_str = (
@@ -67,11 +67,15 @@ def main() -> None:
             vn.train(plan=plan)
             print("✅  Training complete\n")
 
-    if input("Open web app or continue in command-line? [w/C] ").lower().startswith("w"):
+    if (
+        input("Open web app or continue in command-line? [w/C] ")
+        .lower()
+        .startswith("w")
+    ):
         from vanna.src.vanna.flask.__init__ import VannaFlaskApp
+
         app = VannaFlaskApp(vn)
         app.run()
-
 
     # ------------- Interactive loop ------------------
     if USE_AGENT:

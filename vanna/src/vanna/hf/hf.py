@@ -1,5 +1,6 @@
 import re
-from transformers import AutoTokenizer, AutoModelForCausalLM
+
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from ..base import VannaBase
 

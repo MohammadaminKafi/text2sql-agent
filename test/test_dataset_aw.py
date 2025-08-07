@@ -14,21 +14,19 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-import time
-from typing import Callable, Dict, Iterable, List, Tuple
 import argparse
-from datetime import datetime
 import csv
+import time
+from datetime import datetime
+from typing import Callable, Dict, Iterable, List, Tuple
+
 import pandas as pd
-
-from test_utils.dataset_utils import collect_tests, verify_dataset
-from test_utils.eval_utils import (
-    compare_dataframes_as_dataframe_safe,
-    generate_final_report,
-    generate_language_summary,
-)
-
 from openai import OpenAI
+from test_utils.dataset_utils import collect_tests, verify_dataset
+from test_utils.eval_utils import (compare_dataframes_as_dataframe_safe,
+                                   generate_final_report,
+                                   generate_language_summary)
+
 from vanna.src.vanna.base.base import VannaBase
 from vanna.src.vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
 from vanna.src.vanna.openai.openai_chat import OpenAI_Chat
@@ -36,19 +34,24 @@ from vanna.src.vanna.openai.openai_chat import OpenAI_Chat
 try:
     from no_commit_utils.credentials_utils import read_credentials
 except Exception:
+
     def read_avalai_api_key() -> str:
         return os.environ.get("OPENAI_API_KEY", "")
+
     def read_metis_api_key() -> str:
         return os.environ.get("OPENAI_API_KEY", "")
+
 
 use_avalai = True
 
 metis_base_url = "https://api.metisai.ir/openai/v1"
 avalai_base_url = "https://api.avalai.ir/v1"
 
-API_KEY = read_credentials("avalai.key") if use_avalai else read_credentials("metis.key")
+API_KEY = (
+    read_credentials("avalai.key") if use_avalai else read_credentials("metis.key")
+)
 API_BASE_URL = avalai_base_url if use_avalai else read_credentials("metis.key")
-DEFAULT_MODEL = "gpt-4o-mini" # "gemma-3-27b-it"
+DEFAULT_MODEL = "gpt-4o-mini"  # "gemma-3-27b-it"
 DEFAULT_MODE = "ask_agent"
 AGENT_TOOLKIT = ["run_sql", "query_rag"]
 
@@ -70,7 +73,9 @@ class MyVanna(ChromaDB_VectorStore, OpenAI_Chat):
         OpenAI_Chat.__init__(self, config=llm_config or {}, client=client)
 
 
-DATASET_DIR = Path(__file__).resolve().parent.parent / "datasets" / "dataset_AdventureWorks2022"
+DATASET_DIR = (
+    Path(__file__).resolve().parent.parent / "datasets" / "dataset_AdventureWorks2022"
+)
 LOG_DIR = Path(__file__).resolve().parent / "log"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -83,22 +88,32 @@ CONN_STR = (
 )
 
 
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run dataset tests")
-    parser.add_argument("--dataset-dir", type=Path, default=DATASET_DIR,
-                        help="Directory containing prompt/query pairs")
-    parser.add_argument("--log-dir", type=Path, default=LOG_DIR,
-                        help="Directory to write logs")
-    parser.add_argument("--conn-str", default=CONN_STR,
-                        help="ODBC connection string for ground truth queries")
-    parser.add_argument("--model", default=DEFAULT_MODEL,
-                        help="Model name to evaluate")
-    parser.add_argument("--method", choices=["ask", "ask_agent"], default=DEFAULT_MODE,
-                        help="Vanna method to invoke")
-    parser.add_argument("--level", type=int, default=1,
-                        help="Number of prompt variants to evaluate")
+    parser.add_argument(
+        "--dataset-dir",
+        type=Path,
+        default=DATASET_DIR,
+        help="Directory containing prompt/query pairs",
+    )
+    parser.add_argument(
+        "--log-dir", type=Path, default=LOG_DIR, help="Directory to write logs"
+    )
+    parser.add_argument(
+        "--conn-str",
+        default=CONN_STR,
+        help="ODBC connection string for ground truth queries",
+    )
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Model name to evaluate")
+    parser.add_argument(
+        "--method",
+        choices=["ask", "ask_agent"],
+        default=DEFAULT_MODE,
+        help="Vanna method to invoke",
+    )
+    parser.add_argument(
+        "--level", type=int, default=1, help="Number of prompt variants to evaluate"
+    )
     parser.add_argument(
         "--languages",
         nargs="+",
@@ -145,7 +160,9 @@ def run_test_case(
                 generated_sql = result
                 df = vn.run_sql(result)
         else:
-            generated_sql, df, _ = vn.ask(question=prompt, print_results=False, visualize=False)
+            generated_sql, df, _ = vn.ask(
+                question=prompt, print_results=False, visualize=False
+            )
     except Exception as e:
         error = str(e)
         df = None
@@ -178,13 +195,13 @@ def main() -> None:
     current_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     model_dir = log_dir / f"{args.model}-{args.method}-{current_time}"
     model_dir.mkdir(exist_ok=True)
-    
+
     if args.method == "ask_agent":
         vn.create_agent(
             model=DEFAULT_MODEL,
             api_base=API_BASE_URL,
             api_key=API_KEY,
-            agent_toolkit=AGENT_TOOLKIT
+            agent_toolkit=AGENT_TOOLKIT,
         )
 
     if vn.run_sql_is_set:
@@ -208,22 +225,36 @@ def main() -> None:
 
             with open(summary_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
-                writer.writerow([
-                    "case",
-                    "prompt_type",
-                    "sql_path",
-                    "output_path",
-                    "duration_sec",
-                    "generated_sql",
-                    "prompt_file",
-                    "error",
-                    "match",
-                    "row_match",
-                    "gt_rows", "out_rows", "gt_not_in_out", "out_not_in_gt", "common_rows",
-                    "gt_cols", "out_cols", "gt_not_in_out_cols", "out_not_in_gt_cols", "common_cols",
-                    "exact_match", "gt_in_out", "out_in_gt", "ordered_same", "cols_type_match",
-                    "jaccard"
-                ])
+                writer.writerow(
+                    [
+                        "case",
+                        "prompt_type",
+                        "sql_path",
+                        "output_path",
+                        "duration_sec",
+                        "generated_sql",
+                        "prompt_file",
+                        "error",
+                        "match",
+                        "row_match",
+                        "gt_rows",
+                        "out_rows",
+                        "gt_not_in_out",
+                        "out_not_in_gt",
+                        "common_rows",
+                        "gt_cols",
+                        "out_cols",
+                        "gt_not_in_out_cols",
+                        "out_not_in_gt_cols",
+                        "common_cols",
+                        "exact_match",
+                        "gt_in_out",
+                        "out_in_gt",
+                        "ordered_same",
+                        "cols_type_match",
+                        "jaccard",
+                    ]
+                )
 
                 for idx, (sql_path, prompt_path, prompts) in enumerate(cases, start=0):
                     gt_path = cat_dir / f"case{idx:02d}_gt.csv"
@@ -239,7 +270,7 @@ def main() -> None:
                         ("under", prompts.get("underspecified")),
                     ]
                     prompt_order = [p for p in prompt_order if p[1] is not None]
-                    prompt_order = prompt_order[:args.level]
+                    prompt_order = prompt_order[: args.level]
 
                     for p_type, p_text in prompt_order:
                         print(f"{args.model} | {language} | {category}-{idx} {p_type}")
@@ -257,33 +288,44 @@ def main() -> None:
                         gen_sql_path.write_text(gen_sql or "", encoding="utf-8")
                         prompt_txt_path.write_text(p_text or "", encoding="utf-8")
 
-                        comparison_result = compare_dataframes_as_dataframe_safe(gt_df, df_out)
+                        comparison_result = compare_dataframes_as_dataframe_safe(
+                            gt_df, df_out
+                        )
 
-                        comparison_values = comparison_result['Value'].tolist()
+                        comparison_values = comparison_result["Value"].tolist()
 
-                        metrics = dict(zip(comparison_result['Metric'], comparison_values))
-                        gt_rows = metrics.get('gt_rows') or 0
-                        out_rows = metrics.get('out_rows') or 0
-                        common_rows = metrics.get('common_rows') or 0
+                        metrics = dict(
+                            zip(comparison_result["Metric"], comparison_values)
+                        )
+                        gt_rows = metrics.get("gt_rows") or 0
+                        out_rows = metrics.get("out_rows") or 0
+                        common_rows = metrics.get("common_rows") or 0
 
                         row_match = gt_rows == out_rows
                         union_rows = gt_rows + out_rows - common_rows
                         jaccard = common_rows / union_rows if union_rows else 0
-                        match = bool(df_out is not None and row_match and metrics.get("gt_cols") == metrics.get("out_cols"))
+                        match = bool(
+                            df_out is not None
+                            and row_match
+                            and metrics.get("gt_cols") == metrics.get("out_cols")
+                        )
                         comparison_values.append(jaccard)
 
-                        writer.writerow([
-                            idx,
-                            p_type,
-                            sql_path.name,
-                            out_path.name,
-                            f"{duration:.2f}",
-                            gen_sql_path.name,
-                            prompt_txt_path.name,
-                            error,
-                            match,
-                            row_match,
-                        ] + comparison_values)
+                        writer.writerow(
+                            [
+                                idx,
+                                p_type,
+                                sql_path.name,
+                                out_path.name,
+                                f"{duration:.2f}",
+                                gen_sql_path.name,
+                                prompt_txt_path.name,
+                                error,
+                                match,
+                                row_match,
+                            ]
+                            + comparison_values
+                        )
 
                         status = "SUCCESS" if not error else f"ERROR: {error}"
                         print(
@@ -293,6 +335,7 @@ def main() -> None:
         generate_final_report(lang_dir)
 
     generate_language_summary(model_dir, args.languages)
+
 
 if __name__ == "__main__":
     main()

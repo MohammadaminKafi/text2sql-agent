@@ -5,29 +5,20 @@ from dataclasses import dataclass
 from typing import Callable, List, Tuple, Union
 
 import pandas as pd
-import requests
 import plotly.graph_objs
+import requests
 
-from .exceptions import (
-    OTPCodeError,
-    ValidationError,
-)
-from .types import (
-    ApiKey,
-    Status,
-    TrainingData,
-    UserEmail,
-    UserOTP,
-)
+from .exceptions import OTPCodeError, ValidationError
+from .types import ApiKey, Status, TrainingData, UserEmail, UserOTP
 from .utils import sanitize_model_name, validate_config_path
 
 api_key: Union[str, None] = None  # API key for Vanna.AI
 
 fig_as_img: bool = False  # Whether or not to return Plotly figures as images
 
-run_sql: Union[
-    Callable[[str], pd.DataFrame], None
-] = None  # Function to convert SQL to a Pandas DataFrame
+run_sql: Union[Callable[[str], pd.DataFrame], None] = (
+    None  # Function to convert SQL to a Pandas DataFrame
+)
 """
 **Example**
 ```python
@@ -43,8 +34,10 @@ __org: Union[str, None] = None  # Organization name for Vanna.AI
 
 _unauthenticated_endpoint = "https://ask.vanna.ai/unauthenticated_rpc"
 
+
 def error_deprecation():
-    raise Exception("""
+    raise Exception(
+        """
 Please switch to the following method for initializing Vanna:
 
 from vanna.remote import VannaDefault
@@ -53,7 +46,9 @@ api_key = # Your API key from https://vanna.ai/account/profile
 vanna_model_name = # Your model name from https://vanna.ai/account/profile
                     
 vn = VannaDefault(model=vanna_model_name, api_key=api_key)
-""")
+"""
+    )
+
 
 def __unauthenticated_rpc_call(method, params):
     headers = {
@@ -65,7 +60,6 @@ def __unauthenticated_rpc_call(method, params):
         _unauthenticated_endpoint, headers=headers, data=json.dumps(data)
     )
     return response.json()
-
 
 
 def __dataclass_to_dict(obj):
@@ -333,6 +327,7 @@ def ask(
 ]:
     error_deprecation()
 
+
 def generate_plotly_code(
     question: Union[str, None],
     sql: Union[str, None],
@@ -396,5 +391,6 @@ def connect_to_postgres(
 def connect_to_bigquery(cred_file_path: str = None, project_id: str = None):
     error_deprecation()
 
-def connect_to_duckdb(url: str="memory", init_sql: str = None):
+
+def connect_to_duckdb(url: str = "memory", init_sql: str = None):
     error_deprecation()

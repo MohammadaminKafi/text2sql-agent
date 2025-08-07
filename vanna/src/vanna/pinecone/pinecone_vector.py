@@ -1,12 +1,12 @@
 import json
 from typing import List
 
-from pinecone import Pinecone, PodSpec, ServerlessSpec
 import pandas as pd
+from fastembed import TextEmbedding
+from pinecone import Pinecone, PodSpec, ServerlessSpec
+
 from ..base import VannaBase
 from ..utils import deterministic_uuid
-
-from fastembed import TextEmbedding
 
 
 class PineconeDB_VectorStore(VannaBase):
