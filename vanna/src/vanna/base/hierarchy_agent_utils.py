@@ -953,7 +953,6 @@ def create_dspy_lm(
     from urllib.parse import urlparse
 
     import requests
-
     from no_commit_utils.credentials_utils import read_credentials
 
     api_key = api_key or read_credentials("avalai.key")

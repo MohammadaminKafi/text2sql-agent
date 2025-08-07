@@ -1,9 +1,9 @@
 # ------------ vanna + chroma + AvalAI LLM ------------
 import os
 
+from no_commit_utils.credentials_utils import read_credentials
 from openai import OpenAI
 
-from no_commit_utils.credentials_utils import read_credentials
 from vanna.src.vanna.base.base import VannaBase
 from vanna.src.vanna.chromadb.chromadb_vector import ChromaDB_VectorStore
 from vanna.src.vanna.openai.openai_chat import OpenAI_Chat

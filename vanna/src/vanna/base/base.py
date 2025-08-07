@@ -75,7 +75,6 @@ from langchain.chat_models import init_chat_model
 from langchain_core.tools import StructuredTool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
-
 from no_commit_utils.credentials_utils import read_credentials
 
 # Local imports
@@ -89,12 +88,7 @@ from ..utils import validate_config_path
 # os.environ["LANGSMITH_PROJECT"] = "react-sql"
 
 
-
-
-
-
 # from hierarchy_agent_utils import ...
-
 
 
 class VannaBase(ABC):
