@@ -160,7 +160,6 @@ def execute_query(
     logger.info("🪄 execute_query: returned %s rows × %s cols", *df.shape)
     return df
 
-# ───────────────────────────  DSPy Tools  ────────────────────────────────── #
 _PRESET_ANSWERS = [
     "Yes",
     "No",
@@ -207,6 +206,7 @@ def ask_user(question: str) -> str:
 
         # Anything else is invalid ⇒ loop again
         print("Invalid selection. Try again.")
+# ───────────────────────────  DSPy Tools  ────────────────────────────────── #
 
 interact_user = dspy.Tool(
     func=ask_user,
@@ -260,6 +260,39 @@ class SqlReadyPromptSig(Signature):
     )
     sql_ready_prompt: str = OutputField(
         desc="Crisp, DB-oriented instruction in plain language (no SQL syntax)"
+    )
+
+
+class DetectAmbiguitySig(Signature):
+    """
+    Examine the SQL-ready prompt and flag only material ambiguities
+    (omit nit-picking).  
+
+    Examples of ambiguities to catch  
+    • “recent years” without saying which years are considered recent → ask: “Where to start recent years?”  
+    • “top customers” without a count → ask: “How many top customers do you want?”  
+    """
+
+    sql_ready_prompt: str = InputField()
+    has_ambiguity: bool = OutputField(
+        desc="True if the prompt needs clarification; False otherwise"
+    )
+    ambiguities: Dict[str, str] = OutputField(
+        desc="Map {ambiguity_label: question_for_user}; empty if none"
+    )
+
+
+class ClarifyPromptSig(Signature):
+    """
+    Combine the original SQL-ready prompt with user clarifications to
+    produce a single, unambiguous instruction string (no SQL syntax).
+    """
+
+    base_prompt: str = InputField()
+    clarification_qs: List[str] = InputField()
+    clarification_as: List[str] = InputField()
+    clarified_prompt: str = OutputField(
+        desc="Rewritten prompt incorporating all clarifications"
     )
 
 
@@ -322,16 +355,16 @@ class KeywordTableSig(Signature):
     )
 
 
-class KeywordColumnSig(Signature):
+class TableColumnSig(Signature):
     """
-    For a given keyword and table, return the column names most likely
-    to satisfy the keyword.  The model receives *both* column names and
-    their data-types so it can pick the best match (e.g. favour numeric
+    For a given SQL prompt and table, return the column names most likely
+    to satisfy the prompt. Both column names and
+    their data-types are provided so it can pick the best match (e.g. favour numeric
     columns for “amount”, date columns for “year”, etc.).
     """
 
-    keyword: str = InputField(
-        desc="Single keyword"
+    sql_prompt: str = InputField(
+        desc="Natural-language question we want to satisfy"
     )
     schema_name: str = InputField(
         desc="Schema that owns the table"
@@ -340,7 +373,7 @@ class KeywordColumnSig(Signature):
         desc="List of (column_name, data_type) tuples for this table"
     )
     related_columns: List[str] = OutputField(
-        desc="Column names that best match the keyword (no commentary)"
+        desc="Column names that best match the prompt (no commentary)"
     )
 
 # Disabled
@@ -471,7 +504,7 @@ class TranslatePrompt(Module):
 
 
 class SqlPromptCleaner(Module):
-    """Stage 2 – produce a crisp SQL-ready instruction string."""
+    """Produce a crisp SQL-ready instruction string."""
     def __init__(self):
         super().__init__()
         self.pred = Predict(SqlReadyPromptSig)
@@ -482,6 +515,66 @@ class SqlPromptCleaner(Module):
         logger.debug("⚙️ SQL-ready prompt:\n%s\n", out.sql_ready_prompt)
         return out.sql_ready_prompt
 
+
+class AmbiguityResolver(Module):
+    """
+    Stage – detect material ambiguities and, if present, interactively
+    ask the user for clarifications.
+
+    Returns
+    -------
+    {
+        "questions": [question_1, question_2, ...],
+        "answers":   [answer_1,   answer_2,   ...]          # same order
+    }
+    """
+    def __init__(self):
+        super().__init__()
+        self.detect = Predict(DetectAmbiguitySig)
+
+    def forward(self, sql_ready_prompt: str) -> Dict[str, List[str]]:
+        # Let the LLM spot ambiguities
+        out = self.detect(sql_ready_prompt=sql_ready_prompt)
+
+        if not out.has_ambiguity:
+            logger.debug("🔎 AmbiguityResolver: no significant ambiguities detected")
+            return {"questions": [], "answers": []}
+
+        # Ask the user for each clarification ─────────────────────
+        questions, answers = [], []
+        logger.debug("🤔 AmbiguityResolver detected %s ambiguity(ies)", len(out.ambiguities))
+
+        for label, question in out.ambiguities.items():
+            user_ans = ask_user(question)
+            questions.append(question)
+            answers.append(user_ans)
+            logger.debug("🙋 User answered [%s]: %s → %s", label, question, user_ans)
+
+        return {"questions": questions, "answers": answers}
+
+
+class PromptClarifier(Module):
+    """Generate the final clarified SQL prompt."""
+
+    def __init__(self):
+        super().__init__()
+        self.pred = Predict(ClarifyPromptSig)
+
+    def forward(
+        self,
+        base_prompt: str,
+        questions: List[str],
+        answers: List[str],
+    ) -> str:
+        out = self.pred(
+            base_prompt=base_prompt,
+            clarification_qs=questions,
+            clarification_as=answers,
+        )
+        logger.debug("✅ PromptClarifier produced %s chars", len(out.clarified_prompt))
+        logger.debug("📝 Clarified prompt:\n%s\n", out.clarified_prompt)
+        return out.clarified_prompt
+    
 
 class KeywordExtractor(Module):
     """Extract field-like keywords (ignore literal values)."""
@@ -589,65 +682,65 @@ class MatchTables(Module):
 
 class ColumnSelector(Module):
     """
-    Choose relevant columns (with data-types) for each
-    (keyword, table) pair.
+    Choose relevant columns (with data-types) for every table that the previous
+    stage selected.
 
-    Output:
-    {
-        "Sales": {
-            "SalesOrderHeader": [("OrderDate", "DATETIME"), ...],
-            "SalesOrderDetail": [...]
-        },
-        "Person": { ... }
-    }
+    Input
+    -----
+    sql_prompt : str
+        The original natural-language question or SQL request.
+    table_map  : dict[str, list[str]]
+        {schema → [unique table names]}
+
+    Output
+    ------
+    {schema: {table: [(col, dtype), …]}}
     """
     def __init__(self, engine: sa.Engine):
         super().__init__()
         self.engine = engine
-        self.pred   = Predict(KeywordColumnSig)
+        self.pred   = Predict(TableColumnSig)
 
     def forward(
         self,
-        kw_table_map: Dict[str, Dict[str, List[str]]],
+        sql_prompt: str,
+        table_map: Dict[str, List[str]],
     ) -> Dict[str, Dict[str, List[Tuple[str, str]]]]:
 
-        total_pairs = sum(
-            len(tables)
-            for by_schema in kw_table_map.values()
-            for tables in by_schema.values()
-        )
+        total_pairs = sum(len(tables) for tables in table_map.values())
         logger.debug(
-            "📥 ColumnSelector: %s keyword(s) → %s (schema,table) pairs",
-            len(kw_table_map), total_pairs
+            "📥 ColumnSelector: %s schema(s) → %s (schema,table) pairs",
+            len(table_map), total_pairs
         )
 
         out_map: Dict[str, Dict[str, List[Tuple[str, str]]]] = defaultdict(lambda: defaultdict(list))
 
-        for kw, by_schema in kw_table_map.items():
-            for schema, tables in by_schema.items():
-                for table in tables:
-                    # 1) gather (name, dtype) pairs from DB
-                    col_pairs = list_columns(self.engine, schema, table)   # [(col, dtype), …]
+        for schema, tables in table_map.items():
+            # ensure tables are unique per schema
+            for table in dict.fromkeys(tables):                 # preserves order, no dups
+                # 1) pull (name, dtype) pairs from the DB
+                col_pairs = list_columns(self.engine, schema, table)
 
-                    # 2) ask LLM which columns fit the keyword
-                    o = self.pred(
-                        keyword=kw,
-                        schema_name=schema,
-                        table_columns_info=col_pairs,
-                    )
-                    col_names = (json.loads(o.related_columns)
-                                 if isinstance(o.related_columns, str)
-                                 else o.related_columns)
+                # 2) ask the LLM which columns satisfy the prompt
+                o = self.pred(
+                    sql_prompt=sql_prompt,
+                    schema_name=schema,
+                    table_columns_info=col_pairs,
+                )
+                col_names = (json.loads(o.related_columns)
+                             if isinstance(o.related_columns, str)
+                             else o.related_columns)
 
-                    # 3) store unique column tuples, preserving order
-                    dtype_map = {name: dtype for name, dtype in col_pairs}
-                    for name in col_names:
-                        col_tuple = (name, dtype_map.get(name, "UNKNOWN"))
-                        if col_tuple not in out_map[schema][table]:
-                            out_map[schema][table].append(col_tuple)
-                            logger.debug("   ↳ %-10s → %s.%s.%s", kw, schema, table, col_tuple)
+                # 3) store unique column tuples, preserving order
+                dtype_map = {name: dtype for name, dtype in col_pairs}
+                for name in col_names:
+                    col_tuple = (name, dtype_map.get(name, "UNKNOWN"))
+                    if col_tuple not in out_map[schema][table]:
+                        out_map[schema][table].append(col_tuple)
+                        logger.debug("   ↳ %-18s → %s.%s.%s",
+                                     sql_prompt[:15] + ("…" if len(sql_prompt) > 15 else ""),
+                                     schema, table, col_tuple)
 
-        # ── Pretty summary ────────────────────────────────────────────
         if out_map:
             logger.debug("📤 ColumnSelector result:")
             for schema, tables in out_map.items():
@@ -783,40 +876,39 @@ class Text2SQLFlow(Module):
         self.max_columns_per_table = 10
         self.max_sql_tables = 12
 
-        self.translate      = TranslatePrompt()
-        self.clean_prompt   = SqlPromptCleaner()
-        self.keyword_stage  = KeywordExtractor(max_keywords=self.max_keywords)
-        self.match_schemas  = MatchSchemas(self.engine)
-        self.match_tables   = MatchTables(self.engine)
-        self.match_columns  = ColumnSelector(self.engine)
-        self.filter_ctx     = ContextFilter(max_tables=self.max_sql_tables)
-        self.gen_sql        = GenerateSQL()
-        self.validate       = ValidateAndRepairSQL(self.engine)
-        self.report         = MakeReportQuery()
+        self.translate          = TranslatePrompt()
+        self.clean_prompt       = SqlPromptCleaner()
+        self.detect_ambiguity   = AmbiguityResolver()
+        self.clarify_prompt     = PromptClarifier()
+        self.keyword_stage      = KeywordExtractor(max_keywords=self.max_keywords)
+        self.match_schemas      = MatchSchemas(self.engine)
+        self.match_tables       = MatchTables(self.engine)
+        self.match_columns      = ColumnSelector(self.engine)
+        self.filter_ctx         = ContextFilter(max_tables=self.max_sql_tables)
+        self.gen_sql            = GenerateSQL()
+        self.validate           = ValidateAndRepairSQL(self.engine)
+        self.report             = MakeReportQuery()
 
     def forward(self, user_prompt: str):
-        english   = self.translate(user_prompt)
-        input()
-        sql_ready = self.clean_prompt(english)
-        input()
+        english_prompt   = self.translate(user_prompt)
+        sql_ready = self.clean_prompt(english_prompt)
+        ambiguity = self.detect_ambiguity(sql_ready)
+        if ambiguity["questions"] is not None:
+            sql_ready = self.clarify_prompt(sql_ready, ambiguity["questions"], ambiguity["answers"])
         keywords  = self.keyword_stage(sql_ready)
+        
         input()
-
         schema_map = self.match_schemas(keywords)
         table_map  = self.match_tables(schema_map=schema_map)
-        kw_table_map = {
-            kw: {schema: table_map[schema]         # list[str]
-                for schema in schemata             # schemata relevant to this keyword
-                if schema in table_map}            # ignore schemata the LLM skipped
-            for kw, schemata in schema_map.items()
-        }
-        column_map = self.match_columns(kw_table_map)
+        column_map = self.match_columns(sql_prompt=sql_ready, table_map=table_map)
 
-        relations = {
-            s: get_pk_fk_pairs(
-                self.engine, 
-                [(s, t) for t in tbls]) for s, tbls in table_map.items()
-        }
+        survived_tables: List[Tuple[str, str]] = [
+            (schema, table)
+            for schema, tables in column_map.items()
+            for table in tables.keys()
+        ]
+
+        relations = get_pk_fk_pairs(engine=self.engine, tables=survived_tables)
 
         input()
         sql_draft = self.gen_sql(

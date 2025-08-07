@@ -1,5 +1,14 @@
-SELECT h.CustomerID, COUNT(h.SalesOrderID) AS OrderCount, SUM(h.TotalDue) AS TotalSpent 
-FROM Sales.SalesOrderHeader AS h 
-GROUP BY h.CustomerID 
-HAVING SUM(h.TotalDue) > 197452 
-ORDER BY TotalSpent DESC;
+SELECT
+    soh.CustomerID AS CustomerID
+    SUM(soh.TotalDue) AS TotalSpent,
+    COUNT(soh.SalesOrderID) AS OrderCount
+FROM
+    Sales.SalesOrderHeader AS soh
+JOIN
+    Sales.Customer AS c ON soh.CustomerID = c.CustomerID
+GROUP BY
+    c.CustomerName
+HAVING
+    SUM(soh.TotalDue) > 197452
+ORDER BY
+    TotalSpent DESC;
