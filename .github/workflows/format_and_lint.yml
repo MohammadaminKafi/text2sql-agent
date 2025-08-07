@@ -1,0 +1,90 @@
+name: Format & Lint
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0         # required for later push
+
+      - name: Set up Python
+        uses: actions/setup-python@v5   # built-in pip cache
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            **/requirements*.txt
+
+      - name: Install formatters
+        run: |
+          python -m pip install --upgrade pip
+          pip install black isort
+
+      - name: Run Black & isort
+        run: |
+          black . --line-length 88
+          isort .
+
+      # Commit & push if anything changed
+      - name: Auto-commit patched files
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: auto-format with black & isort [skip ci]"
+
+    outputs:
+      formatted: ${{ steps.git_auto_commit_action.outputs.changes_committed }}
+
+  # Skip lint if we just pushed a formatting fix;
+  # a new run will start automatically on the new commit.
+  lint:
+    needs: format
+    if: ${{ needs.format.outputs.formatted == 'false' }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            **/requirements*.txt
+
+      - name: Install project & linters
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e .
+          pip install pylint
+
+      - name: Lint with pylint & PEP-8
+        uses: marian-code/python-lint-annotate@v4
+        with:
+          python-root-list: |
+            main.py
+            datasets
+            test
+            vanna
+          use-pylint: true
+          use-pycodestyle: true
+          use-black: false
+          use-flake8: false
+          use-isort: false
+          extra-pylint-options: "--rcfile=.pylintrc --output-format=colorized"
