@@ -1,18 +1,22 @@
+import os
 import json
 import logging
 import re
 import time
 import urllib.parse
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import dspy
 import pandas as pd
 import sqlalchemy as sa
-import sqlparse
-from dspy import (ChainOfThought, InputField, Module, OutputField, Predict,
-                  ProgramOfThought, Signature)
 from sqlalchemy import create_engine, inspect
+from urllib.parse import urlparse
+import sqlparse
+
+from dspy import (ChainOfThought, InputField, Module, OutputField, Predict,
+                  Signature)
+
 
 # ─────────────────────────────  LOGGING SETUP  ───────────────────────────── #
 LOG_FORMAT = "%(asctime)s  [%(levelname)s]  %(name)s › %(message)s"
@@ -156,8 +160,11 @@ def is_sql_valid(sql: str) -> bool:
 def execute_query(engine: sa.Engine, query: str) -> pd.DataFrame:
     logger.info("🪄 execute_query: %s", query.replace("\n", " "))
     with engine.connect() as conn:
-        df = pd.read_sql(query, conn)
-    logger.info("🪄 execute_query: returned %s rows × %s cols", *df.shape)
+        result = conn.execute(sa.text(query))  # Use sa.text() for raw SQL
+        rows = result.fetchall()
+        columns = result.keys()
+    df = pd.DataFrame(rows, columns=columns)
+    logger.info("🪄 execute_query: returned %s rows × %s cols", df.shape[0], df.shape[1])
     return df
 
 
@@ -223,12 +230,20 @@ interact_user = dspy.Tool(
 
 class TranslatePromptSig(Signature):
     """
-    If the user prompt is not in English, translate it; otherwise return it unchanged.
+    If the user prompt is not in English, translate it;
+    otherwise return it unchanged. Also detect and return the language.
     """
 
-    user_prompt: str = InputField(desc="Original user prompt in any language")
+    user_prompt: str = InputField(
+        desc="Original user prompt in any language"
+    )
+
     english_prompt: str = OutputField(
         desc="Prompt translated to English, or the original text if already English"
+    )
+
+    language: str = OutputField(
+        desc="One-word language of the user_prompt, e.g. English, Farsi, etc."
     )
 
 
@@ -285,17 +300,55 @@ class DetectAmbiguitySig(Signature):
     )
 
 
-class ClarifyPromptSig(Signature):
+class TranslateQuestionContextSig(Signature):
     """
-    Combine the original SQL-ready prompt with user clarifications to
-    produce a single, unambiguous instruction string (no SQL syntax).
+    Translate a question (in English) into the user's language.
+    Use the original user prompt to preserve the context for the user.
     """
 
-    base_prompt: str = InputField()
-    clarification_qs: List[str] = InputField()
-    clarification_as: List[str] = InputField()
+    original_prompt: str = InputField(
+        desc="Original user prompt in any language"
+    )
+    user_language: str = InputField(
+        desc="Detected language of the user's original prompt, e.g. English, Farsi, etc."
+    )
+    question_en: str = InputField(
+        desc="Clarification question in English"
+    )
+
+    question_translated: str = OutputField(
+        desc="Question translated to user's language"
+    )
+
+
+class ClarifyPromptSig(Signature):
+    """
+    Combine the original SQL-ready prompt with user clarifications
+    to produce a single, unambiguous instruction string.
+
+    The output prompt should:
+    - Maintain the same structure as the sql_ready_prompt
+    - Be in English
+
+    Note:
+    - The clarification question-answer pairs may be in any language.
+    - The language of these pairs is provided for proper processing.
+    """
+
+    sql_ready_prompt: str = InputField(desc="Original SQL-ready prompt with structure to preserve")
+
+    clarification_qs: List[str] = InputField(
+        desc="List of clarification questions (may not be in English)"
+    )
+    clarification_as: List[str] = InputField(
+        desc="List of corresponding clarification answers (may not be in English)"
+    )
+    clarifications_language: str = InputField(
+        desc="Language code (ISO) of the clarification question-answer pairs"
+    )
+
     clarified_prompt: str = OutputField(
-        desc="Rewritten prompt incorporating all clarifications"
+        desc="Rewritten prompt in English, preserving the structure of sql_ready_prompt and incorporating all clarifications"
     )
 
 
@@ -362,30 +415,17 @@ class TableColumnSig(Signature):
     )
 
 
-# Disabled
-class FilterContextSig(Signature):
-    """
-    From the full column context pick only the tables/columns that matter
-    for this prompt. Keep any tables that may relate to the prompt or may
-    help generating a better query.
-    """
-
-    user_prompt: str = InputField(desc="End-user's natural-language request")
-    table_columns_ctx: str = InputField(
-        desc="JSON {schema: {table: [[col, dtype], …]}} from ColumnSelector"
-    )
-    max_tables: int = InputField(desc="Hard cap on the number of tables to keep")
-    filtered_table_columns: Dict[str, Dict[str, List[Tuple[str, str]]]] = OutputField(
-        desc="Pruned column map"
-    )
-
-
 class GenSqlSig(Signature):
     """
     Write a runnable T-SQL query that answers the request.
-    - Use only the provided schemas/tables/columns/relations.
-    - Terminate with a semicolon.
-    - Do NOT wrap in markdown fences.
+    
+    Instructions for the LLM:
+    - Use only the provided schemas, tables, columns, and relations in the context.
+    - Never join tables or fields that do not have an explicitly provided relation in the context.
+    - Terminate the query with a semicolon.
+    - Do NOT wrap the SQL in markdown fences or any extra formatting.
+    - Use proper SQL syntax and alias tables when necessary for clarity.
+    - Ensure the query returns only the requested information, no extra columns or rows.
     """
 
     sql_prompt: str = InputField(desc="SQL-ready instruction string")
@@ -398,6 +438,13 @@ class GenSqlSig(Signature):
 class EvaluateSig(Signature):
     """
     Decide whether the dataframe answers the prompt.
+
+    Special case:
+    - If the dataframe is empty but the SQL and columns appear correct,
+      treat the result as VALID (empty result can be valid).
+
+    If INVALID, provide a clear and straightforward cause
+    explaining why, avoiding jargon or vague statements.
     """
 
     user_prompt: str = InputField(desc="Original user prompt")
@@ -407,7 +454,7 @@ class EvaluateSig(Signature):
     )
     verdict: str = OutputField(desc="'VALID' or 'INVALID'")
     cause: str = OutputField(
-        desc="Short explanation when verdict is INVALID; empty otherwise"
+        desc="Clear, straightforward explanation when verdict is INVALID; empty otherwise"
     )
 
 
@@ -415,11 +462,16 @@ class RefineSqlSig(Signature):
     """
     Improve a faulty SQL query given the evaluator’s reason.
     Keep the same tables when possible; fix only what is necessary.
+    Use the provided context (schemas/tables/columns/relations)
+    to help generate correct SQL.
     """
 
     sql_prompt: str = InputField(desc="Original SQL-ready prompt")
     last_sql: str = InputField(desc="Previous (failing) SQL query")
     cause: str = InputField(desc="Why the query was judged INVALID")
+    context: Dict[str, Any] = InputField(
+        desc="Dict with schemas/tables/columns/relations"
+    )
     improved_sql: str = OutputField(desc="Corrected SQL query")
 
 
@@ -450,19 +502,20 @@ class ReportSig(Signature):
 
 
 class TranslatePrompt(Module):
-    """Translate to English (or passthrough)."""
+    """Translate to English (or passthrough) and detect the language."""
 
     def __init__(self):
         super().__init__()
         self.pred = Predict(TranslatePromptSig)
 
-    def forward(self, user_prompt: str) -> str:
+    def forward(self, user_prompt: str) -> tuple[str, str]:
         out = self.pred(user_prompt=user_prompt)
         logger.debug(
             "🌐 TranslatePrompt: %s→%s chars", len(user_prompt), len(out.english_prompt)
         )
         logger.debug("📜 Translated prompt:\n%s\n", out.english_prompt)
-        return out.english_prompt
+        logger.debug("🗣 Detected language: %s", out.language)
+        return out.english_prompt, out.language
 
 
 class SqlPromptCleaner(Module):
@@ -486,21 +539,18 @@ class SqlPromptCleaner(Module):
 class AmbiguityResolver(Module):
     """
     Stage – detect material ambiguities and, if present, interactively
-    ask the user for clarifications.
-
-    Returns
-    -------
-    {
-        "questions": [question_1, question_2, ...],
-        "answers":   [answer_1,   answer_2,   ...]          # same order
-    }
+    ask the user for clarifications, translating questions into
+    the user's language.
     """
 
     def __init__(self):
         super().__init__()
         self.detect = Predict(DetectAmbiguitySig)
+        self.translator = Predict(TranslateQuestionContextSig)
 
-    def forward(self, sql_ready_prompt: str) -> Dict[str, List[str]]:
+    def forward(
+        self, sql_ready_prompt: str, original_prompt: str, user_language: str
+    ) -> Dict[str, List[str]]:
         # Let the LLM spot ambiguities
         out = self.detect(sql_ready_prompt=sql_ready_prompt)
 
@@ -508,20 +558,29 @@ class AmbiguityResolver(Module):
             logger.debug("🔎 AmbiguityResolver: no significant ambiguities detected")
             return {"questions": [], "answers": []}
 
-        # Ask the user for each clarification ─────────────────────
         questions, answers = [], []
         logger.debug(
             "🤔 AmbiguityResolver detected %s ambiguity(ies)", len(out.ambiguities)
         )
 
-        for label, question in out.ambiguities.items():
-            user_ans = ask_user(question)
-            questions.append(question)
+        for label, question_en in out.ambiguities.items():
+            # Translate question to user's language with context preservation
+            trans_out = self.translator(
+                original_prompt=original_prompt,
+                user_language=user_language,
+                question_en=question_en,
+            )
+            question_user_lang = trans_out.question_translated
+
+            # Ask the user in their language
+            user_ans = ask_user(question_user_lang)
+
+            questions.append(question_user_lang)
             answers.append(user_ans)
-            logger.debug("🙋 User answered [%s]: %s → %s", label, question, user_ans)
+            logger.debug("🙋 User answered [%s]: %s → %s", label, question_user_lang, user_ans)
 
         return {"questions": questions, "answers": answers}
-
+    
 
 class PromptClarifier(Module):
     """Generate the final clarified SQL prompt."""
@@ -535,11 +594,13 @@ class PromptClarifier(Module):
         base_prompt: str,
         questions: List[str],
         answers: List[str],
+        user_language: str
     ) -> str:
         out = self.pred(
-            base_prompt=base_prompt,
+            sql_ready_prompt=base_prompt,
             clarification_qs=questions,
             clarification_as=answers,
+            clarifications_language=user_language
         )
         logger.debug("✅ PromptClarifier produced %s chars", len(out.clarified_prompt))
         logger.debug("📝 Clarified prompt:\n%s\n", out.clarified_prompt)
@@ -753,43 +814,6 @@ class ColumnSelector(Module):
         return out_map
 
 
-# Disabled
-class ContextFilter(Module):
-    """LLM chooses the minimum table subset needed for this prompt."""
-
-    def __init__(self, max_tables: int = 12):
-        super().__init__()
-        self.max_tables = max_tables
-        self.pred = Predict(FilterContextSig)
-
-    def forward(
-        self,
-        user_prompt: str,
-        table_columns: Dict[str, Dict[str, List[Tuple[str, str]]]],
-    ) -> Dict[str, Dict[str, List[Tuple[str, str]]]]:
-
-        tbl_json = json.dumps(table_columns)
-
-        out = self.pred(
-            user_prompt=user_prompt,
-            table_columns_ctx=tbl_json,
-            max_tables=self.max_tables,
-        )
-
-        cols = (
-            json.loads(out.filtered_table_columns)
-            if isinstance(out.filtered_table_columns, str)
-            else out.filtered_table_columns
-        )
-
-        logger.debug(
-            "📤 ContextFilter kept %s table(s) in %s schema(s)",
-            sum(len(tbls) for tbls in cols.values()),
-            len(cols),
-        )
-        return cols
-
-
 class GenerateSQL(Module):
     """Create first-draft SQL using only column and relation context."""
 
@@ -819,31 +843,42 @@ class ValidateAndRepairSQL(Module):
         super().__init__()
         self.engine = engine
         self.max_attempts = max_attempts
-        self.evaluate = Predict(EvaluateSig)
-        self.refine = Predict(RefineSqlSig)
+        self.evaluate = ChainOfThought(EvaluateSig)
+        self.refine = ChainOfThought(RefineSqlSig)
 
     def forward(
-        self, user_prompt: str, sql_prompt: str, sql: str
+        self,
+        user_prompt: str,
+        sql_prompt: str,
+        sql: str,
+        table_columns: Dict[str, Dict[str, List[Tuple[str, str]]]],
+        relations: Dict[str, list],
     ) -> Tuple[pd.DataFrame, str]:
+        ctx = {
+            "columns": table_columns,
+            "relations": relations,
+        }
+
         for attempt in range(1, self.max_attempts + 1):
             logger.info("🔄 Validate attempt %s/%s", attempt, self.max_attempts)
 
             sql_clean = extract_sql(sql)
             if not is_sql_valid(sql_clean):
-                verdict, cause = "INVALID", "Not a SELECT"
+                verdict, cause = "INVALID", "Query is not a SELECT statement."
             else:
                 try:
                     df = execute_query(self.engine, sql_clean)
                 except Exception as exc:
                     verdict, cause = "INVALID", f"Execution error: {exc}"
                 else:
-                    sample = df.head(5).to_json()
+                    sample = df.head(3).to_json()
                     ev = self.evaluate(
                         user_prompt=user_prompt,
                         sql_prompt=sql_prompt,
                         dataframe_json=sample,
                     )
-                    verdict, cause = ev.verdict.upper(), ev.cause or ""
+                    verdict = ev.verdict.upper()
+                    cause = ev.cause or ""
 
             if verdict == "VALID":
                 logger.info("✅ SQL validated")
@@ -851,11 +886,14 @@ class ValidateAndRepairSQL(Module):
 
             logger.info("🔧 Refining (%s)", cause)
             sql = self.refine(
-                sql_prompt=sql_prompt, last_sql=sql_clean, cause=cause
+                sql_prompt=sql_prompt,
+                last_sql=sql_clean,
+                cause=cause,
+                context=ctx,
             ).improved_sql
 
         raise RuntimeError("Could not craft a valid SQL query.")
-
+    
 
 class MakeReportQuery(Module):
     """Transform working SQL into human-readable report + summary."""
@@ -895,12 +933,11 @@ class Text2SQLFlow(Module):
         self.clean_prompt = SqlPromptCleaner()
         self.detect_ambiguity = AmbiguityResolver()
         self.clarify_prompt = PromptClarifier()
-        self.keyword_stage = KeywordExtractor(max_keywords=self.max_keywords)
+        self.extract_keywords = KeywordExtractor(max_keywords=self.max_keywords)
         self.match_schemas = MatchSchemas(self.engine)
         self.match_tables = MatchTables(self.engine)
         self.match_columns = ColumnSelector(self.engine)
-        self.filter_ctx = ContextFilter(max_tables=self.max_sql_tables)
-        self.gen_sql = GenerateSQL()
+        self.generate_sql_draft = GenerateSQL()
         self.validate = ValidateAndRepairSQL(self.engine)
         self.report = MakeReportQuery()
 
@@ -908,14 +945,17 @@ class Text2SQLFlow(Module):
 
         start_time = time.time()
 
-        english_prompt = self.translate(user_prompt)
+        english_prompt, original_prompt_language = self.translate(user_prompt)
         sql_ready = self.clean_prompt(english_prompt)
-        ambiguity = self.detect_ambiguity(sql_ready)
-        if ambiguity["questions"] is not None:
+        ambiguity = self.detect_ambiguity(sql_ready, user_prompt, original_prompt_language)
+        if len(ambiguity["questions"]) != 0:
             sql_ready = self.clarify_prompt(
-                sql_ready, ambiguity["questions"], ambiguity["answers"]
+                sql_ready,
+                ambiguity["questions"],
+                ambiguity["answers"],
+                original_prompt_language
             )
-        keywords = self.keyword_stage(sql_ready)
+        keywords = self.extract_keywords(sql_ready)
 
         schema_map = self.match_schemas(keywords)
         table_map = self.match_tables(schema_map=schema_map)
@@ -929,12 +969,12 @@ class Text2SQLFlow(Module):
 
         relations = get_pk_fk_pairs(engine=self.engine, tables=survived_tables)
 
-        sql_draft = self.gen_sql(
+        sql_draft = self.generate_sql_draft(
             sql_prompt=sql_ready, table_columns=column_map, relations=relations
         )
 
         df, working_sql = self.validate(
-            user_prompt=user_prompt, sql_prompt=sql_ready, sql=sql_draft
+            user_prompt=user_prompt, sql_prompt=sql_ready, sql=sql_draft, table_columns=column_map, relations=relations
         )
 
         readable_sql, summary = self.report(
@@ -953,21 +993,28 @@ def create_dspy_lm(
     api_key: str | None = None,
     api_base: str = "https://api.avalapis.ir/v1",
 ):
-    from urllib.parse import urlparse
 
-    import requests
-    from no_commit_utils.credentials_utils import read_credentials
-
-    api_key = api_key or read_credentials("avalai.key")
+    api_key = api_key or os.getenv("AvalAI_API_KEY")
     urlparse(api_base)
 
     logger.debug("🌟 Initialising dspy.LM: model=%s  api_base=%s", model, api_base)
-    lm = dspy.LM(model=model, api_key=api_key, api_base=api_base)
+    lm = dspy.LM(
+        model=model, 
+        api_key=api_key, 
+        api_base=api_base,
+        temperature=0.3,
+        max_tokens=8000,
+        cache=False,
+        cache_in_memory=False,
+        num_retries=5,
+    )
+
     return lm
 
 
 # ────────────────────────────────  CLI  ───────────────────────────────────── #
 if __name__ == "__main__":
+
     engine_url = "mssql+pyodbc:///?odbc_connect=" + urllib.parse.quote_plus(
         "DRIVER={ODBC Driver 17 for SQL Server};"
         "SERVER=localhost;"
@@ -977,7 +1024,13 @@ if __name__ == "__main__":
     logger.debug("🔧 SQLAlchemy engine URL: %s", engine_url)
     engine = create_engine(engine_url)
 
-    lm = create_dspy_lm()
+    # ollama_chat/              ->  http://199.168.172.141:11434/v1 (api_key='none')
+    # gemma3:27b                ->  192.168.172.141:11434/v1
+    # openai/gemma-3-27b-it     ->  https://api.avalapis.ir/v1
+    lm = create_dspy_lm(
+        model="openai/gpt-4o-mini",
+        api_base="https://api.avalapis.ir/v1",
+    )
 
     flow = Text2SQLFlow(engine=engine, lm=lm)
 
