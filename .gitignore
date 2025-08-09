@@ -1,0 +1,48 @@
+# Custom folders to ignore
+/no_commit_utils/
+/log/
+/test/log/
+/credentials/
+/cache/
+/vdb/
+
+# Database files
+/*.sqlite3
+*.sqlite
+notebooks/chroma.sqlite3
+chroma.sqlite3
+milvus.db
+.milvus.db.lock
+
+# Python build artifacts
+build/
+dist/
+*.egg-info/
+__pycache__/
+tests/__pycache__/
+
+# Virtual environments
+venv/
+.env
+
+# macOS
+.DS_Store
+
+# Editor and IDE settings
+.idea/
+
+# Jupyter and notebooks
+notebooks/*
+.ipynb_checkpoints/
+
+# Coverage and testing
+.coverage
+.coverage.*
+.tox/
+htmlcov/
+
+# Binary files
+*.bin
+
+# Docs
+docs/*.html

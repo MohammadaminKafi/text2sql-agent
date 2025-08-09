@@ -1,0 +1,6 @@
+{
+  "well-explained": "List employees whose current hourly rate is above the overall company average. Include their ID, first name, last name and rate.",
+  "poorly-explained": "Who gets paid more than most?",
+  "underspecified": "Give me some employee salaries.",
+  "follow-up": "Include employees with rates above company average."
+}

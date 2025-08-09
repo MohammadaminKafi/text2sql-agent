@@ -1,0 +1,6 @@
+{
+  "well-explained": "For each product sold by more than one vendor, concatenate all its vendor StandardPrice values into a semicolon-separated PricesList using XML PATH and STUFF, showing ProductID, Name, and PricesList.",
+  "poorly-explained": "List product prices from vendors.",
+  "underspecified": "Show vendor prices per product.",
+  "follow-up": "Combine all vendor prices for each product."
+}

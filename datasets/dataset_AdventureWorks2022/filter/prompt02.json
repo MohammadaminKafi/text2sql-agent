@@ -1,0 +1,6 @@
+{
+  "well-explained": "List employees whose pay rate is not above 100, showing their business entity ID, first name, and last name.",
+  "poorly-explained": "Give me employees without high pay rates.",
+  "underspecified": "Show employee details.",
+  "follow-up": "Exclude anyone earning more than 100."
+}

@@ -1,0 +1,6 @@
+{
+  "well-explained": "Display sales-order lines where the ordered quantity is higher than the average quantity ordered for the same product. Return order ID, product ID and quantity.",
+  "poorly-explained": "Big order details.",
+  "underspecified": "List sales order details.",
+  "follow-up": "Filter details with quantity above the product average."
+}

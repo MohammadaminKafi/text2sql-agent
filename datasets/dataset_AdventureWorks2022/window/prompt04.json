@@ -1,0 +1,6 @@
+{
+  "well-explained": "List all employees, their sick leave hours, and rank them within their job title based on the number of sick leave hours in descending order, where the employee with the most sick leave hours gets rank 1.",
+  "poorly-explained": "Get employees and rank them by sick leave hours.",
+  "underspecified": "Show employee sick leave details.",
+  "follow-up": "Rank employees by sick leave hours within their job title."
+}

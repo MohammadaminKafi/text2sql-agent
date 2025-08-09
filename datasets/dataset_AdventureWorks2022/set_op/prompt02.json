@@ -1,0 +1,6 @@
+{
+  "well-explained": "List salespeople who have processed orders with a total due greater than 1000, but exclude those who processed orders before January 1, 2012. Show their business entity ID, first name, and last name.",
+  "poorly-explained": "Get salespeople with high-value orders after 2012.",
+  "underspecified": "Show salespeople with orders.",
+  "follow-up": "Keep only salespeople with orders >1000 and none before 2012."
+}
