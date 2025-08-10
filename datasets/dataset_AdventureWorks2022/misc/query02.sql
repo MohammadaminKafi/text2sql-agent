@@ -1,14 +1,14 @@
-SELECT
-    ps.Name AS CategoryName,
-    AVG(pl.ListPrice) AS AverageListPrice,
-    MAX(pl.ListPrice) AS MaximumListPrice
+SELECT 
+	pg.ProductCategoryID AS CategoryID,
+	pg.[Name] AS CategoryName,
+	MAX(p.ListPrice) AS MaxListPrice,
+	AVG(p.ListPrice) AS AvgListPrice
 FROM
-    Production.Product p
-JOIN
-    Production.ProductSubcategory ps ON p.ProductSubcategoryID = ps.ProductSubcategoryID
-JOIN
-    Production.ProductListPriceHistory pl ON p.ProductID = pl.ProductID
+	Production.[Product] p
+	JOIN Production.ProductSubcategory psg ON p.ProductSubcategoryID = psg.ProductSubcategoryID
+	JOIN Production.ProductCategory pg ON psg.ProductCategoryID = pg.ProductCategoryID
 GROUP BY
-    ps.Name
+	pg.[Name],
+	pg.ProductCategoryID
 ORDER BY
-    AverageListPrice ASC;
+	AvgListPrice;

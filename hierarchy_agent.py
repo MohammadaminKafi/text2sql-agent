@@ -736,6 +736,11 @@ class ColumnSelector(Module):
     Choose relevant columns (with data-types) for every table that the previous
     stage selected.
 
+    Behaviors:
+      - pass_all=True      → skip LLM; return ALL columns for all tables.
+      - pass_all_cols=True → ask LLM; for tables with ≥1 related column, return ALL columns.
+      - otherwise          → ask LLM; return only the related columns.
+
     Input
     -----
     sql_prompt : str
@@ -748,9 +753,11 @@ class ColumnSelector(Module):
     {schema: {table: [(col, dtype), …]}}
     """
 
-    def __init__(self, engine: sa.Engine):
+    def __init__(self, engine: sa.Engine, pass_all: bool = True, pass_all_cols: bool = True):
         super().__init__()
         self.engine = engine
+        self.pass_all = pass_all
+        self.pass_all_cols = pass_all_cols
         self.pred = Predict(TableColumnSig)
 
     def forward(
@@ -776,7 +783,18 @@ class ColumnSelector(Module):
                 # 1) pull (name, dtype) pairs from the DB
                 col_pairs = list_columns(self.engine, schema, table)
 
-                # 2) ask the LLM which columns satisfy the prompt
+                # 2) pass_all overrides everything
+                if self.pass_all:
+                    for col_tuple in col_pairs:
+                        if col_tuple not in out_map[schema][table]:
+                            out_map[schema][table].append(col_tuple)
+                    logger.debug(
+                        "   ↳ pass_all=True: returning ALL columns for %s.%s (%d cols)",
+                        schema, table, len(col_pairs),
+                    )
+                    continue
+
+                # 3) Otherwise, consult the LLM
                 o = self.pred(
                     sql_prompt=sql_prompt,
                     schema_name=schema,
@@ -786,9 +804,20 @@ class ColumnSelector(Module):
                     json.loads(o.related_columns)
                     if isinstance(o.related_columns, str)
                     else o.related_columns
-                )
+                ) or []
 
-                # 3) store unique column tuples, preserving order
+                # 4) pass_all_cols logic: if there is ANY related column, include ALL columns
+                if self.pass_all_cols and len(col_names) > 0:
+                    for col_tuple in col_pairs:
+                        if col_tuple not in out_map[schema][table]:
+                            out_map[schema][table].append(col_tuple)
+                    logger.debug(
+                        "   ↳ pass_all_cols=True and LLM found %d related in %s.%s → returning ALL (%d cols)",
+                        len(col_names), schema, table, len(col_pairs),
+                    )
+                    continue
+
+                # 5) Default: only include the columns the LLM selected
                 dtype_map = {name: dtype for name, dtype in col_pairs}
                 for name in col_names:
                     col_tuple = (name, dtype_map.get(name, "UNKNOWN"))
@@ -797,9 +826,7 @@ class ColumnSelector(Module):
                         logger.debug(
                             "   ↳ %-18s → %s.%s.%s",
                             sql_prompt[:15] + ("…" if len(sql_prompt) > 15 else ""),
-                            schema,
-                            table,
-                            col_tuple,
+                            schema, table, col_tuple,
                         )
 
         if out_map:
@@ -923,8 +950,8 @@ class Text2SQLFlow(Module):
 
         self.engine = engine
 
-        self.max_keywords = 4
-        self.max_schema_per_keyword = 2
+        self.max_keywords = 3
+        self.max_schema_per_keyword = 1
         self.max_table_per_schema = 4
         self.max_columns_per_table = 10
         self.max_sql_tables = 12
@@ -934,8 +961,8 @@ class Text2SQLFlow(Module):
         self.detect_ambiguity = AmbiguityResolver()
         self.clarify_prompt = PromptClarifier()
         self.extract_keywords = KeywordExtractor(max_keywords=self.max_keywords)
-        self.match_schemas = MatchSchemas(self.engine)
-        self.match_tables = MatchTables(self.engine)
+        self.match_schemas = MatchSchemas(self.engine, max_schema_per_kw=self.max_schema_per_keyword)
+        self.match_tables = MatchTables(self.engine, max_tbl_per_kw_schema=self.max_table_per_schema)
         self.match_columns = ColumnSelector(self.engine)
         self.generate_sql_draft = GenerateSQL()
         self.validate = ValidateAndRepairSQL(self.engine)
@@ -1003,10 +1030,10 @@ def create_dspy_lm(
         api_key=api_key, 
         api_base=api_base,
         temperature=0.3,
-        max_tokens=8000,
+        #max_tokens=8000,
         cache=False,
-        cache_in_memory=False,
-        num_retries=5,
+        #cache_in_memory=False,
+        #num_retries=5,
     )
 
     return lm
@@ -1026,10 +1053,10 @@ if __name__ == "__main__":
 
     # ollama_chat/              ->  http://199.168.172.141:11434/v1 (api_key='none')
     # gemma3:27b                ->  192.168.172.141:11434/v1
-    # openai/gemma-3-27b-it     ->  https://api.avalapis.ir/v1
+    # openai/gemma-3-27b-it     ->  https://api.avalapis.ir/v1, https://api.avalai.ir/v1
     lm = create_dspy_lm(
         model="openai/gpt-4o-mini",
-        api_base="https://api.avalapis.ir/v1",
+        api_base="https://api.avalai.ir/v1",
     )
 
     flow = Text2SQLFlow(engine=engine, lm=lm)
