@@ -42,9 +42,6 @@ logger = logging.getLogger(__name__)
 # ────────────────────────────  DSPy Modules  ─────────────────────────────── #
 
 
-import re
-from typing import Tuple
-
 class QuickText2SQLGate(Module):
     def __init__(self, min_confidence_true: float = 0.35):
         super().__init__()
@@ -273,8 +270,19 @@ class ConvertDates(Module):
 
             results.append((source_cal, self.target_calendar, title, converted_date))
 
+        logger.info("🧮 Detected %d date%s", len(results), "" if len(results) == 1 else "s")
+        if results:
+            preview_items = [
+                f"[{src}→{tgt}] {orig} → {conv}"
+                for (src, tgt, orig, conv) in results[:5]
+            ]
+            preview = " | ".join(preview_items)
+            if len(results) > 5:
+                preview += f" | … +{len(results) - 5} more"
+            logger.info("📅 Date conversions: %s", preview)
+
         return results
-    
+  
 
 class NormalizeDatesTranslate(Module):
     """

@@ -35,35 +35,48 @@ class QuickGateSig(Signature):
 
 class ExtractDatesSig(Signature):
     """
-    Extract absolute date mentions from a Persian or English prompt.
+    Extract absolute date mentions from a Persian (Farsi) or English prompt.
+
+    Calendar determination:
+    • If the user's prompt is in Farsi, default source_calendar = "solar" (Jalali/Shamsi).
+    • Override to source_calendar = "gregorian" if ANY of the following are true:
+        – The prompt explicitly indicates Gregorian (e.g., "میلادی", "Gregorian", "گریگوری").
+        – Gregorian/Western month names are used (e.g., January…December, ژانویه…دسامبر).
+        – The year clearly matches Gregorian ranges/patterns (e.g., 18xx–21xx) and there’s
+          no explicit Solar indicator. Explicit labels always take precedence.
 
     Requirements:
     1) Detect all explicit dates AND date ranges (e.g., "from … to …", "…–…").
-       • Split each range into two separate dates in output (one entry per endpoint).
-    2) For each date, return:
+       • Split each range into two separate dates in the output (one entry per endpoint).
+    2) Be sensitive to ordinal/positional date-like expressions and map them to fields:
+       • Examples: "2nd month", "the 7th day", "ماه دوم", "روز هفتم", "روز ۲‌ام", "ماه ۱۲‌ام".
+       • If only an ordinal month is given → month="MM" (zero-padded), day="", year="".
+       • If only an ordinal day is given   → day="DD", month="", year="".
+       • If both appear, populate both fields; leave missing fields empty.
+    3) For each date, return:
        • title: exact date text as it appeared in the prompt (before normalization)
        • day: "01"–"31" or "" if missing
-       • month: "01"–"12" OR a corrected month name in ANY language; if a month name is provided with typos,
-         correct the spelling before returning; return "" if missing
+       • month: "01"–"12" OR a corrected month name in ANY language; if a month name
+         is provided with typos, correct it before returning; "" if missing
        • year: "YYYY" (4 digits) or "" if missing
-       • source_calendar: "solar" for Jalali/Shamsi/Persian or "gregorian" for Gregorian/Miladi
-    3) Preserve the order of mentions as they appear in the prompt (earliest first).
-    4) If no dates are found, return an empty dict.
-    5) Output ONLY in the specified dict format.
+       • source_calendar: "solar" (Jalali/Shamsi) or "gregorian" (Miladi), per rules above
+    4) Preserve the order of mentions as they appear in the prompt (earliest first).
+    5) If no dates are found, return an empty dict.
+    6) Output ONLY in the specified dict format.
 
     Output format:
     {
         "<exact date string from prompt>": {
             "source_calendar": "solar" | "gregorian",
-            "day": "DD" or "",
-            "month": "MM" or corrected month name (any language) or "",
-            "year": "YYYY" or ""
+            "day":   "DD"  or "",
+            "month": "MM"  or corrected month name (any language) or "",
+            "year":  "YYYY" or ""
         },
         ...
     }
     """
 
-    user_prompt: str = InputField(desc="Raw user prompt (Persian or English)")
+    user_prompt: str = InputField(desc="Raw user prompt (Farsi or English)")
 
     dates: Dict[str, Dict[str, str]] = OutputField(
         desc='Dictionary of {title: {"source_calendar":..., "day":..., "month":..., "year":...}}'
