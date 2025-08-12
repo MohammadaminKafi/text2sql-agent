@@ -1,0 +1,9 @@
+{
+  "en": {
+    "sample0": "Sum TotalDue for orders placed on the 15th day of any month, grouped by month.",
+    "sample1": "Monthly totals for orders made on day 15."
+  },
+  "fa": {
+    "sample1": "جمع فروش برای سفارش‌های ثبت‌شده در روز ۱۵ ماه را برای هر ماه به من بده.."
+  }
+}

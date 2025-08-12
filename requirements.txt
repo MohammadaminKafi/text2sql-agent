@@ -2,3 +2,7 @@ dspy
 pandas
 SQLAlchemy
 sqlparse
+jdatetime
+
+pytest 
+pytest-cov

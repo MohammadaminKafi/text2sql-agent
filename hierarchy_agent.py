@@ -13,6 +13,9 @@ import sqlalchemy as sa
 from sqlalchemy import create_engine, inspect
 from urllib.parse import urlparse
 import sqlparse
+from datetime import date as py_date, datetime as py_datetime
+import calendar
+import jdatetime
 
 from dspy import (ChainOfThought, InputField, Module, OutputField, Predict,
                   Signature)
@@ -51,6 +54,79 @@ for name in NOISY:
 
 logger = logging.getLogger(__name__)
 logger.debug("🚀 Logging initialised (level=DEBUG)")
+
+
+# ──────────────────────────  DATE / CALENDAR HELPERS  ───────────────────── #
+
+CAL_GREGORIAN = "Gregorian"
+CAL_SOLAR = "Solar"  # Solar Hijri (Shamsi / Jalali)
+
+# Persian and Arabic-Indic digits → Latin
+_PERSIAN_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹", "0123456789")
+_ARABIC_INDIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")
+
+def normalize_eastern_digits(s: str) -> str:
+    """Convert Persian/Arabic-Indic numerals in a string to ASCII digits."""
+    return s.translate(_PERSIAN_DIGITS).translate(_ARABIC_INDIC_DIGITS)
+
+
+# Month name maps (minimal but practical set)
+GREG_MONTHS_EN = {
+    "january": 1, "february": 2, "march": 3, "april": 4, "may": 5, "june": 6,
+    "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "aug": 8, "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+
+# Solar Hijri months (Persian script + common Latin transliterations)
+JALALI_MONTHS = {
+    "فروردین": 1, "ordibehesht": 2, "اردیبهشت": 2, "khordad": 3, "خرداد": 3,
+    "tir": 4, "تیر": 4, "mordad": 5, "مرداد": 5, "shahrivar": 6, "شهریور": 6,
+    "mehr": 7, "مهر": 7, "aban": 8, "آبان": 8, "azar": 9, "آذر": 9,
+    "dey": 10, "دی": 10, "bahman": 11, "بهمن": 11, "esfand": 12, "اسفند": 12,
+}
+
+def jalali_days_in_month(year: int, month: int) -> int:
+    """Number of days in a given Jalali month (uses jdatetime leap logic)."""
+    if month < 1 or month > 12:
+        raise ValueError("Invalid Jalali month")
+    if month <= 6:
+        return 31
+    if 7 <= month <= 11:
+        return 30
+    # Esfand (12)
+    # jdatetime leap: create a date and call isleap()
+    if jdatetime is None:
+        # conservative default if lib missing
+        return 29
+    leap = jdatetime.date(year, 1, 1).isleap()
+    return 30 if leap else 29
+
+def gregorian_days_in_month(year: int, month: int) -> int:
+    return calendar.monthrange(year, month)[1]
+
+
+def _ensure_jdatetime():
+    if jdatetime is None:
+        raise RuntimeError("jdatetime is not installed. Please: pip install jdatetime")
+
+
+def jalali_to_gregorian(y: int, m: int, d: int) -> py_date:
+    """Exact conversion Jalali → Gregorian date."""
+    _ensure_jdatetime()
+    return jdatetime.date(y, m, d).togregorian()
+
+def gregorian_to_jalali(y: int, m: int, d: int) -> jdatetime.date:
+    """Exact conversion Gregorian → Jalali date."""
+    _ensure_jdatetime()
+    return jdatetime.date.fromgregorian(year=y, month=m, day=d)
+
+def format_iso(y: int, m: int | None = None, d: int | None = None) -> str:
+    """ISO-ish string with available granularity."""
+    if m is None:
+        return f"{y:04d}"
+    if d is None:
+        return f"{y:04d}-{m:02d}"
+    return f"{y:04d}-{m:02d}-{d:02d}"
 
 
 # ──────────────────────────  Utility helpers  ────────────────────────────── #
@@ -226,6 +302,72 @@ interact_user = dspy.Tool(
 )
 
 # ───────────────────────────  DSPy Signatures  ───────────────────────────── #
+
+
+class QuickGateSig(Signature):
+    """
+    Decide if the user's request is likely a Text-to-SQL task.
+
+    Behaviors (LOOSE):
+    - Return TRUE when the prompt seems to ask for data retrieval, filtering,
+      grouping, joining, aggregation, KPIs, tabular reports, or trends that are
+      typically answered from an internal database — in ANY language.
+    - Do NOT require the word "SQL".
+    - If ambiguous, prefer TRUE but use modest confidence (≈0.35–0.55).
+
+    Return FALSE when the prompt is clearly not a database question
+    (creative writing, general coding unrelated to data access, web/news lookup,
+     personal advice, casual chat, or questions about LLMs/tools themselves).
+
+    Output:
+    - is_text2sql: boolean
+    - confidence: 0.0–1.0 (calibrated, not necessarily linear)
+    - cause: one short line explaining the decision
+    """
+
+    user_prompt: str = InputField(desc="Raw user prompt in any language")
+
+    is_text2sql: bool = OutputField(desc="True if likely a Text-to-SQL request")
+    confidence: float = OutputField(desc="0.0–1.0 confidence in the decision")
+    cause: str = OutputField(desc="One short line explaining the decision")
+
+
+class DetectDatesSig(Signature):
+    """
+    Find date-like mentions in the user's prompt and decide how to normalize them
+    to the target database calendar.
+
+    Behavior:
+    - Identify explicit dates (e.g., 2024-05-03, 03/05/2024, 1402/03/10), month-year
+      (e.g., June 2023, Khordad 1402 / خرداد ۱۴۰۲), and year-only (e.g., 2021, ۱۴۰۲).
+    - For each item, infer source calendar (gregorian|jalali) from context (month names,
+      language, or year range). When unclear, make your best call.
+    - Choose target_calendar based on database_calendar input.
+    - Return a compact JSON array. Each element must be:
+        {
+          "text": "<verbatim span from the prompt>",
+          "src_calendar": "gregorian" | "jalali",
+          "granularity": "day" | "month" | "year",
+          "year": 2024,
+          "month": 5 | null,
+          "day": 3 | null
+        }
+      Only include items you are confident in and that should be normalized.
+
+    Notes:
+    - Keep numbers exactly as they appear in the prompt in "text".
+    - Use Latin digits in year/month/day fields.
+    """
+
+    original_prompt: str = InputField(
+        desc="User's raw prompt (any language, any digits)"
+    )
+    database_calendar: str = InputField(
+        desc="'Gregorian' or 'Solar' (Solar Hijri/Jalali)"
+    )
+    items_json: str = OutputField(
+        desc="JSON array of date objects as specified"
+    )
 
 
 class TranslatePromptSig(Signature):
@@ -499,6 +641,195 @@ class ReportSig(Signature):
 
 
 # ────────────────────────────  DSPy Modules  ─────────────────────────────── #
+
+
+class QuickText2SQLGate(Module):
+    def __init__(self, min_confidence_true: float = 0.35):
+        super().__init__()
+        self.pred = Predict(QuickGateSig)
+        self.min_confidence_true = min_confidence_true  # keeps it loose
+
+    def forward(self, user_prompt: str) -> tuple[bool, float, str]:
+        logger.debug("🚪 Gate.in: %s chars", len(user_prompt or ""))
+
+        # Call LLM (module_name helps token accounting wrappers)
+        out = self.pred(user_prompt=user_prompt, module_name="QuickText2SQLGate")
+
+        is_sql = bool(getattr(out, "is_text2sql", False))
+        conf_raw = float(getattr(out, "confidence", 0.0) or 0.0)
+        cause = (getattr(out, "cause", "") or "").strip()
+
+        conf = conf_raw
+        if is_sql and conf < self.min_confidence_true:
+            logger.debug("⬆️  Confidence floor applied: %.2f → %.2f",
+                         conf, self.min_confidence_true)
+            conf = self.min_confidence_true
+
+        logger.info("🚪 Gate.out: is_text2sql=%s  conf=%.2f (raw=%.2f)  cause=%s",
+                    is_sql, conf, conf_raw, cause or "—")
+
+        return is_sql, conf, cause
+
+
+class DateNormalizer(Module):
+    """
+    Pre-translation stage.
+    Uses the LLM to find date-like mentions and this module to do *exact*
+    Gregorian↔Jalali conversion with jdatetime. Replaces found spans inline
+    with ISO-like normalized values in the database calendar.
+
+    Returns (normalized_prompt, metadata)
+    metadata: list of dicts with 'original', 'normalized', 'granularity', 'src_calendar', 'tgt_calendar'
+    """
+
+    def __init__(self, database_calendar: str):
+        super().__init__()
+        if database_calendar not in (CAL_GREGORIAN, CAL_SOLAR):
+            raise ValueError("database_calendar must be 'Gregorian' or 'Solar'")
+        self.database_calendar = database_calendar
+        self.detect = ChainOfThought(DetectDatesSig)
+
+    def _convert_one(self, item: dict) -> tuple[str, dict]:
+        """
+        Perform exact conversion using jdatetime where possible.
+        Returns (normalized_string, metadata)
+        """
+        text = item.get("text", "")
+        src = (item.get("src_calendar") or "").lower()
+        gran = (item.get("granularity") or "").lower()
+        y = item.get("year")
+        m = item.get("month")
+        d = item.get("day")
+
+        # Normalize digits (LLM should give Latin digits, but be safe)
+        try:
+            y = int(normalize_eastern_digits(str(y))) if y is not None else None
+            m = int(normalize_eastern_digits(str(m))) if m is not None else None
+            d = int(normalize_eastern_digits(str(d))) if d is not None else None
+        except Exception:
+            # if parsing fails, don't convert
+            return text, {
+                "original": text, "normalized": text, "granularity": gran,
+                "src_calendar": src, "tgt_calendar": self.database_calendar.lower(),
+                "status": "left-unchanged (parse-failure)"
+            }
+
+        tgt = CAL_SOLAR.lower() if self.database_calendar == CAL_SOLAR else CAL_GREGORIAN.lower()
+
+        # If granularity is day → exact convert.
+        if gran == "day" and y and m and d:
+            try:
+                if src == "jalali" and tgt == "gregorian":
+                    g = jalali_to_gregorian(y, m, d)
+                    norm = format_iso(g.year, g.month, g.day)
+                elif src == "gregorian" and tgt == "jalali":
+                    j = gregorian_to_jalali(y, m, d)
+                    norm = format_iso(j.year, j.month, j.day)
+                else:
+                    # already in target calendar
+                    norm = format_iso(y, m, d)
+            except Exception as exc:
+                logger.debug("Date conversion failed for %s → %s: %s", text, tgt, exc)
+                norm = format_iso(y, m, d)  # fallback: keep as-is
+        # Month granularity → convert first day, then keep YYYY-MM in target.
+        elif gran == "month" and y and m:
+            try:
+                if src == "jalali" and tgt == "gregorian":
+                    g = jalali_to_gregorian(y, m, 1)
+                    # Normalize as YYYY-MM in target calendar
+                    norm = f"{g.year:04d}-{g.month:02d}"
+                elif src == "gregorian" and tgt == "jalali":
+                    j = gregorian_to_jalali(y, m, 1)
+                    norm = f"{j.year:04d}-{j.month:02d}"
+                else:
+                    norm = f"{y:04d}-{m:02d}"
+            except Exception as exc:
+                logger.debug("Month conversion failed for %s → %s: %s", text, tgt, exc)
+                norm = f"{y:04d}-{m:02d}"
+        # Year-only → convert first day of year, then keep YYYY in target.
+        elif gran == "year" and y:
+            try:
+                if src == "jalali" and tgt == "gregorian":
+                    g = jalali_to_gregorian(y, 1, 1)
+                    norm = f"{g.year:04d}"
+                elif src == "gregorian" and tgt == "jalali":
+                    j = gregorian_to_jalali(y, 1, 1)
+                    norm = f"{j.year:04d}"
+                else:
+                    norm = f"{y:04d}"
+            except Exception as exc:
+                logger.debug("Year conversion failed for %s → %s: %s", text, tgt, exc)
+                norm = f"{y:04d}"
+        else:
+            # Unknown granularity or insufficient parts — leave unchanged
+            norm = text
+
+        meta = {
+            "original": text, "normalized": norm, "granularity": gran,
+            "src_calendar": src, "tgt_calendar": tgt, "status": "ok"
+        }
+        return norm, meta
+
+    def forward(self, user_prompt: str) -> tuple[str, list[dict]]:
+        """
+        1) Ask LLM to detect/plan date conversions.
+        2) Convert with jdatetime.
+        3) Replace the detected spans inline (first occurrence per span).
+        """
+        if not user_prompt:
+            return user_prompt, []
+
+        # Keep a digits-normalized copy to help later stages, but we always replace on the original text
+        planned = self.detect(
+            original_prompt=user_prompt,
+            database_calendar=self.database_calendar
+        )
+
+        try:
+            items = json.loads(planned.items_json or "[]")
+            if not isinstance(items, list):
+                items = []
+        except Exception:
+            items = []
+
+        normalized_prompt = user_prompt
+        metadata: list[dict] = []
+
+        # Replace one-by-one to avoid shifting indices; escape literal text
+        for item in items:
+            norm_str, meta = self._convert_one(item)
+            metadata.append(meta)
+
+            original_span = item.get("text", "")
+            if not original_span:
+                continue
+
+            # Only replace the first occurrence to stay aligned with the user's intent
+            try:
+                pattern = re.escape(original_span)
+                normalized_prompt, n = re.subn(pattern, norm_str, normalized_prompt, count=1)
+                if n == 0:
+                    # Try again with digit-normalized variant (covers Eastern digits)
+                    alt = normalize_eastern_digits(original_span)
+                    if alt != original_span:
+                        pattern = re.escape(alt)
+                        normalized_prompt = re.sub(pattern, norm_str, normalized_prompt, count=1)
+            except re.error:
+                # If regex fails, skip replacement
+                pass
+
+        # Also normalize number digits globally to reduce translation errors (optional, mild)
+        normalized_prompt = normalize_eastern_digits(normalized_prompt)
+
+        # Log a compact summary
+        if metadata:
+            logger.debug("🗓️ DateNormalizer applied %d conversion(s): %s",
+                         len(metadata),
+                         "; ".join([f"{m['original']}→{m['normalized']}" for m in metadata]))
+        else:
+            logger.debug("🗓️ DateNormalizer found no convertible dates")
+
+        return normalized_prompt, metadata
 
 
 class TranslatePrompt(Module):
@@ -950,12 +1281,16 @@ class Text2SQLFlow(Module):
 
         self.engine = engine
 
+        self.database_calendar = "Gregorian"
+
         self.max_keywords = 3
         self.max_schema_per_keyword = 1
         self.max_table_per_schema = 4
         self.max_columns_per_table = 10
         self.max_sql_tables = 12
 
+        self.gate = QuickText2SQLGate(min_confidence_true=0.2)
+        self.normalize_date = DateNormalizer(database_calendar=self.database_calendar)
         self.translate = TranslatePrompt()
         self.clean_prompt = SqlPromptCleaner()
         self.detect_ambiguity = AmbiguityResolver()
@@ -968,10 +1303,16 @@ class Text2SQLFlow(Module):
         self.validate = ValidateAndRepairSQL(self.engine)
         self.report = MakeReportQuery()
 
-    def forward(self, user_prompt: str):
+    def forward(self, user_prompt: str) -> Tuple[pd.DataFrame, str, str]:
 
-        start_time = time.time()
-
+        # Sanity checks
+        is_sql_request, gate_confidence, gate_cause = self.gate(user_prompt)
+        if not is_sql_request:
+            return pd.DataFrame(), "", f"Request does not seem to be a SQL request (confidence={gate_confidence}): {gate_cause}"
+        
+        # Prompt reforming
+        user_prompt_norm, date_meta = self.normalize_date(user_prompt)
+        input()
         english_prompt, original_prompt_language = self.translate(user_prompt)
         sql_ready = self.clean_prompt(english_prompt)
         ambiguity = self.detect_ambiguity(sql_ready, user_prompt, original_prompt_language)
@@ -984,6 +1325,7 @@ class Text2SQLFlow(Module):
             )
         keywords = self.extract_keywords(sql_ready)
 
+        # Database inspection
         schema_map = self.match_schemas(keywords)
         table_map = self.match_tables(schema_map=schema_map)
         column_map = self.match_columns(sql_prompt=sql_ready, table_map=table_map)
@@ -996,6 +1338,7 @@ class Text2SQLFlow(Module):
 
         relations = get_pk_fk_pairs(engine=self.engine, tables=survived_tables)
 
+        # SQL generation
         sql_draft = self.generate_sql_draft(
             sql_prompt=sql_ready, table_columns=column_map, relations=relations
         )
@@ -1004,12 +1347,10 @@ class Text2SQLFlow(Module):
             user_prompt=user_prompt, sql_prompt=sql_ready, sql=sql_draft, table_columns=column_map, relations=relations
         )
 
+        # Report preparation
         readable_sql, summary = self.report(
             user_prompt=user_prompt, sql_prompt=sql_ready, sql=working_sql
         )
-
-        end_time = time.time()
-        print(f"\n\n\n\nElapsed: {end_time - start_time}\n\n\n")
 
         return df, readable_sql, summary
 

@@ -1,0 +1,10 @@
+{
+  "en": {
+    "sample0": "Total sales for July across all years, grouped by year.",
+    "sample1": "Sum TotalDue for the 7th month across years."
+  },
+  "fa": {
+    "sample0": "مجموع فروش برای ماه ژوئیه در همه سال‌ها، به تفکیک سال.",
+    "sample1": "جمع فروش برای ماه هفتم در تمام سال‌ها."
+  }
+}
