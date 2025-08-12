@@ -33,60 +33,76 @@ class QuickGateSig(Signature):
     cause: str = OutputField(desc="One short line explaining the decision")
 
 
-class DetectDatesSig(Signature):
+class ExtractDatesSig(Signature):
     """
-    Find date-like mentions in the user's prompt and decide how to normalize them
-    to the target database calendar.
+    Extract absolute date mentions from a Persian or English prompt.
+
+    Requirements:
+    1) Detect all explicit dates AND date ranges (e.g., "from … to …", "…–…").
+       • Split each range into two separate dates in output (one entry per endpoint).
+    2) For each date, return:
+       • title: exact date text as it appeared in the prompt (before normalization)
+       • day: "01"–"31" or "" if missing
+       • month: "01"–"12" OR a corrected month name in ANY language; if a month name is provided with typos,
+         correct the spelling before returning; return "" if missing
+       • year: "YYYY" (4 digits) or "" if missing
+       • source_calendar: "solar" for Jalali/Shamsi/Persian or "gregorian" for Gregorian/Miladi
+    3) Preserve the order of mentions as they appear in the prompt (earliest first).
+    4) If no dates are found, return an empty dict.
+    5) Output ONLY in the specified dict format.
+
+    Output format:
+    {
+        "<exact date string from prompt>": {
+            "source_calendar": "solar" | "gregorian",
+            "day": "DD" or "",
+            "month": "MM" or corrected month name (any language) or "",
+            "year": "YYYY" or ""
+        },
+        ...
+    }
+    """
+
+    user_prompt: str = InputField(desc="Raw user prompt (Persian or English)")
+
+    dates: Dict[str, Dict[str, str]] = OutputField(
+        desc='Dictionary of {title: {"source_calendar":..., "day":..., "month":..., "year":...}}'
+    )
+
+
+class NormalizeDatesTranslateSig(Signature):
+    """
+    Normalize dates and translate the prompt.
 
     Behavior:
-    - Identify explicit dates (e.g., 2024-05-03, 03/05/2024, 1402/03/10), month-year
-      (e.g., June 2023, Khordad 1402 / خرداد ۱۴۰۲), and year-only (e.g., 2021, ۱۴۰۲).
-    - For each item, infer source calendar (gregorian|jalali) from context (month names,
-      language, or year range). When unclear, make your best call.
-    - Choose target_calendar based on database_calendar input.
-    - Return a compact JSON array. Each element must be:
-        {
-          "text": "<verbatim span from the prompt>",
-          "src_calendar": "gregorian" | "jalali",
-          "granularity": "day" | "month" | "year",
-          "year": 2024,
-          "month": 5 | null,
-          "day": 3 | null
-        }
-      Only include items you are confident in and that should be normalized.
+    - For each tuple in `converted_dates`
+      (source_calendar, target_calendar, original_date_text, converted_date),
+      REPLACE every exact occurrence of original_date_text with converted_date ONLY.
+    - If the prompt is already in English, return the replaced prompt unchanged.
+    - Otherwise, translate the replaced prompt to English.
+    - Always detect and return the original language.
+    - The `converted_dates` list may be empty; in that case perform a normal translate/passthrough.
 
-    Notes:
-    - Keep numbers exactly as they appear in the prompt in "text".
-    - Use Latin digits in year/month/day fields.
+    Example:
+      converted_dates = [
+        ("solar", "gregorian", "۵ فروردین ۱۴۰۳", "24-03-2024"),
+        ("solar", "gregorian", "۲۳ اسفند ۱۴۰۲", "13-03-2024"),
+      ]
+      "گزارش فروش از ۵ فروردین ۱۴۰۳ تا ۲۳ اسفند ۱۴۰۲"
+        → replace: "گزارش فروش از 24-03-2024 تا 13-03-2024"
+        → translate: "Sales report from 24-03-2024 to 13-03-2024"
     """
 
-    original_prompt: str = InputField(
-        desc="User's raw prompt (any language, any digits)"
-    )
-    database_calendar: str = InputField(
-        desc="'Gregorian' or 'Solar' (Solar Hijri/Jalali)"
-    )
-    items_json: str = OutputField(
-        desc="JSON array of date objects as specified"
-    )
-
-
-class TranslatePromptSig(Signature):
-    """
-    If the user prompt is not in English, translate it;
-    otherwise return it unchanged. Also detect and return the language.
-    """
-
-    user_prompt: str = InputField(
-        desc="Original user prompt in any language"
+    user_prompt: str = InputField(desc="Original user prompt in any language")
+    converted_dates: List[Tuple[str, str, str, str]] = InputField(
+        desc="List of (source_calendar, target_calendar, original_date_text, converted_date); may be empty"
     )
 
     english_prompt: str = OutputField(
-        desc="Prompt translated to English, or the original text if already English"
+        desc="English prompt (or original if already English), with original date substrings replaced by converted dates only"
     )
-
     language: str = OutputField(
-        desc="One-word language of the user_prompt, e.g. English, Farsi, etc."
+        desc="One-word language of the original prompt (e.g., English, Persian)"
     )
 
 

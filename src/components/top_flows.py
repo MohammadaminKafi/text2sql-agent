@@ -7,8 +7,8 @@ import dspy
 
 from components.dspy_modules import (
     QuickText2SQLGate,
-    DateNormalizer,
-    TranslatePrompt,
+    ConvertDates,
+    NormalizeDatesTranslate,
     SqlPromptCleaner,
     AmbiguityResolver,
     PromptClarifier,
@@ -45,8 +45,8 @@ class Text2SQLFlow(Module):
         self.max_sql_tables = 12
 
         self.gate = QuickText2SQLGate(min_confidence_true=0.2)
-        self.normalize_date = DateNormalizer(database_calendar=self.database_calendar)
-        self.translate = TranslatePrompt()
+        self.convert_dates = ConvertDates(target_calendar=self.database_calendar)
+        self.translate = NormalizeDatesTranslate()
         self.clean_prompt = SqlPromptCleaner()
         self.detect_ambiguity = AmbiguityResolver()
         self.clarify_prompt = PromptClarifier()
@@ -66,9 +66,8 @@ class Text2SQLFlow(Module):
             return pd.DataFrame(), "", f"Request does not seem to be a SQL request (confidence={gate_confidence}): {gate_cause}"
         
         # Prompt reforming
-        user_prompt_norm, date_meta = self.normalize_date(user_prompt)
-        input()
-        english_prompt, original_prompt_language = self.translate(user_prompt)
+        dates_list = self.convert_dates(user_prompt)
+        english_prompt, original_prompt_language = self.translate(user_prompt, dates_list)
         sql_ready = self.clean_prompt(english_prompt)
         ambiguity = self.detect_ambiguity(sql_ready, user_prompt, original_prompt_language)
         if len(ambiguity["questions"]) != 0:

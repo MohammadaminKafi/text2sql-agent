@@ -4,14 +4,14 @@ import json
 import sqlalchemy as sa
 import pandas as pd
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 from dspy import Module, Predict, ChainOfThought
 
 from components.dspy_signatures import (
     QuickGateSig,
-    DetectDatesSig,
-    TranslatePromptSig,
+    ExtractDatesSig,
+    NormalizeDatesTranslateSig,
     SqlReadyPromptSig,
     DetectAmbiguitySig,
     TranslateQuestionContextSig,
@@ -26,12 +26,7 @@ from components.dspy_signatures import (
     ReportSig
 )
 from components.utils.date_utils import (
-    normalize_eastern_digits,
-    jalali_to_gregorian,
-    gregorian_to_jalali,
-    format_iso,
-    CAL_GREGORIAN,
-    CAL_SOLAR
+    convert_calendar
 )
 from components.utils.helpers import (
     list_schemas,
@@ -47,209 +42,295 @@ logger = logging.getLogger(__name__)
 # ────────────────────────────  DSPy Modules  ─────────────────────────────── #
 
 
+import re
+from typing import Tuple
+
 class QuickText2SQLGate(Module):
     def __init__(self, min_confidence_true: float = 0.35):
         super().__init__()
         self.pred = Predict(QuickGateSig)
         self.min_confidence_true = min_confidence_true  # keeps it loose
 
+        # --- Heuristic patterns (fast path) ---
+        # SQL/code signals
+        self.re_sql_sniff = re.compile(
+            r"\b(select|from|where|group\s+by|order\s+by|join|left\s+join|inner\s+join|having|limit)\b",
+            re.IGNORECASE | re.UNICODE,
+        )
+        self.re_code_fence = re.compile(r"```.*?\n", re.DOTALL)
+
+        # Business / analytics verbs (en + fa transliterations)
+        self.re_data_verbs = re.compile(
+            r"\b(show|list|fetch|get|count|sum|avg|average|rank|top|trend|compare|report|kpi|breakdown|by|per)\b"
+            r"|گزارش|فیلتر|گروه(?:‌|)بندی|مقایسه|میانگین|جمع|تعداد|روند|براساس|بر اساس|به تفکیک",
+            re.IGNORECASE | re.UNICODE,
+        )
+
+        # Schema/table/column nouns
+        self.re_db_objects = re.compile(
+            r"\b(table|tables|column|columns|field|fields|schema|database|dataset)\b"
+            r"|جدول|ستون|فیلد|شِما|پایگاه\s*داده",
+            re.IGNORECASE | re.UNICODE,
+        )
+
+        # Time/date hints (YYYY, months incl. Persian)
+        self.re_date_hints = re.compile(
+            r"\b(19\d{2}|20\d{2}|21\d{2})\b"
+            r"|january|february|march|april|may|june|july|august|september|october|november|december"
+            r"|فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|مهر|آبان|آذر|دی|بهمن|اسفند",
+            re.IGNORECASE | re.UNICODE,
+        )
+
+        # Clear negatives (creative writing, chit-chat, coding not about data access, news, meta-LLM)
+        self.re_negative = re.compile(
+            r"\b(poem|poetry|story|song|lyrics|joke|advise|advice|feel|therapy|news|headline|who\s+is|define|explain|"
+            r"translate|summarize|paraphrase|regex|bug|stacktrace|compile|deploy|docker|kubernetes|frontend|backend|"
+            r"prompt|llm|chatgpt|model)\b"
+            r"|شعر|داستان|ترجمه|اخبار|خبر|کیست|توضیح|احساس|مشاوره",
+            re.IGNORECASE | re.UNICODE,
+        )
+
+    # ---- heuristics ---------------------------------------------------------
+    def _heuristic_gate(self, text: str) -> Tuple[bool, float, str, bool]:
+        """
+        Returns (is_sql, confidence, cause, decisive)
+        decisive=True → skip LLM; False → fallback to LLM
+        """
+        t = (text or "").strip()
+        if not t:
+            return (False, 0.20, "empty prompt", True)
+
+        # crude token length
+        tokens = re.findall(r"\w+", t, flags=re.UNICODE)
+        if len(tokens) < 3 and not self.re_sql_sniff.search(t):
+            return (False, 0.30, "too short to be a database question", True)
+
+        # Hard negatives
+        if self.re_negative.search(t):
+            # Only decisive if there are no strong SQL signals
+            if not (self.re_sql_sniff.search(t) or self.re_db_objects.search(t)):
+                return (False, 0.65, "matches non-database intent", True)
+
+        # Strong positives
+        strong_pos = 0
+        if self.re_sql_sniff.search(t) or self.re_code_fence.search(t):
+            strong_pos += 2
+        if self.re_data_verbs.search(t):
+            strong_pos += 1
+        if self.re_db_objects.search(t):
+            strong_pos += 1
+        if self.re_date_hints.search(t):
+            strong_pos += 1
+
+        # Decisive positive
+        if strong_pos >= 3:
+            # looks like data retrieval/reporting
+            conf = min(0.85, 0.55 + 0.1 * strong_pos)
+            return (True, conf, "matches database/reporting patterns", True)
+
+        # Decisive negative
+        if strong_pos == 0 and len(tokens) < 6:
+            return (False, 0.50, "no database cues in short prompt", True)
+
+        # Not decisive → let the LLM decide
+        return (False, 0.0, "", False)
+
+    # ---- main ---------------------------------------------------------------
     def forward(self, user_prompt: str) -> tuple[bool, float, str]:
         logger.debug("🚪 Gate.in: %s chars", len(user_prompt or ""))
 
-        # Call LLM (module_name helps token accounting wrappers)
-        out = self.pred(user_prompt=user_prompt, module_name="QuickText2SQLGate")
+        # Heuristic fast path
+        is_sql_h, conf_h, cause_h, decisive = self._heuristic_gate(user_prompt)
+        if decisive:
+            is_sql = is_sql_h
+            conf = conf_h
+            cause = cause_h
+            if is_sql and conf < self.min_confidence_true:
+                logger.debug("⬆️  Confidence floor applied (heuristic): %.2f → %.2f",
+                             conf, self.min_confidence_true)
+                conf = self.min_confidence_true
+            logger.info("🚪 Gate.out (heuristic): is_text2sql=%s  conf=%.2f  cause=%s",
+                        is_sql, conf, cause or "—")
+            return is_sql, conf, cause
 
+        # Fallback to LLM gate
+        out = self.pred(user_prompt=user_prompt)
         is_sql = bool(getattr(out, "is_text2sql", False))
         conf_raw = float(getattr(out, "confidence", 0.0) or 0.0)
         cause = (getattr(out, "cause", "") or "").strip()
 
         conf = conf_raw
         if is_sql and conf < self.min_confidence_true:
-            logger.debug("⬆️  Confidence floor applied: %.2f → %.2f",
-                         conf, self.min_confidence_true)
+            logger.debug("⬆️  Confidence floor applied: %.2f → %.2f", conf, self.min_confidence_true)
             conf = self.min_confidence_true
 
-        logger.info("🚪 Gate.out: is_text2sql=%s  conf=%.2f (raw=%.2f)  cause=%s",
+        logger.info("🚪 Gate.out (LLM): is_text2sql=%s  conf=%.2f (raw=%.2f)  cause=%s",
                     is_sql, conf, conf_raw, cause or "—")
-
         return is_sql, conf, cause
+    
 
-
-class DateNormalizer(Module):
+class ConvertDates(Module):
     """
-    Pre-translation stage.
-    Uses the LLM to find date-like mentions and this module to do *exact*
-    Gregorian↔Jalali conversion with jdatetime. Replaces found spans inline
-    with ISO-like normalized values in the database calendar.
+    Apply ExtractDatesSig to the prompt, convert each date to the target calendar,
+    and return a list of tuples:
 
-    Returns (normalized_prompt, metadata)
-    metadata: list of dicts with 'original', 'normalized', 'granularity', 'src_calendar', 'tgt_calendar'
+        (source_calendar, target_calendar, original_date_text, converted_date)
+
+    Notes:
+      - `original_date_text` is exactly as it appeared in the user prompt.
+      - If convert_calendar returns kind="invalid", that date is skipped.
+      - Order matches the order of mentions in the original prompt.
     """
 
-    def __init__(self, database_calendar: str):
+    def __init__(self, target_calendar: str = "gregorian"):
         super().__init__()
-        if database_calendar not in (CAL_GREGORIAN, CAL_SOLAR):
-            raise ValueError("database_calendar must be 'Gregorian' or 'Solar'")
-        self.database_calendar = database_calendar
-        self.detect = ChainOfThought(DetectDatesSig)
+        self.extract = ChainOfThought(ExtractDatesSig)
+        self.target_calendar = self._norm_calendar(target_calendar)
 
-    def _convert_one(self, item: dict) -> tuple[str, dict]:
+    @staticmethod
+    def _norm_calendar(name: Optional[str]) -> str:
+        n = (name or "").strip().lower()
+        if n in {"jalali", "shamsi", "solar", "hijri-shamsi", "persian", "iranian", "fa"}:
+            return "solar"
+        if n in {"gregorian", "miladi", "en"}:
+            return "gregorian"
+        return "gregorian"
+
+    @staticmethod
+    def _norm_day(day: Optional[str]) -> str:
+        s = (day or "").strip()
+        if s.isdigit():
+            i = int(s)
+            if 1 <= i <= 31:
+                return f"{i:02d}"
+        return ""
+
+    @staticmethod
+    def _norm_month(month: Optional[str]) -> str:
         """
-        Perform exact conversion using jdatetime where possible.
-        Returns (normalized_string, metadata)
+        Accepts "01".."12" or any name (already typo-corrected by ExtractDatesSig).
+        If numeric and valid, return zero-padded; otherwise pass the name through.
         """
-        text = item.get("text", "")
-        src = (item.get("src_calendar") or "").lower()
-        gran = (item.get("granularity") or "").lower()
-        y = item.get("year")
-        m = item.get("month")
-        d = item.get("day")
+        s = (month or "").strip()
+        if not s:
+            return ""
+        if s.isdigit():
+            i = int(s)
+            return f"{i:02d}" if 1 <= i <= 12 else ""
+        return s  # keep name as is
 
-        # Normalize digits (LLM should give Latin digits, but be safe)
-        try:
-            y = int(normalize_eastern_digits(str(y))) if y is not None else None
-            m = int(normalize_eastern_digits(str(m))) if m is not None else None
-            d = int(normalize_eastern_digits(str(d))) if d is not None else None
-        except Exception:
-            # if parsing fails, don't convert
-            return text, {
-                "original": text, "normalized": text, "granularity": gran,
-                "src_calendar": src, "tgt_calendar": self.database_calendar.lower(),
-                "status": "left-unchanged (parse-failure)"
-            }
+    @staticmethod
+    def _norm_year(year: Optional[str]) -> str:
+        s = (year or "").strip()
+        return s if (len(s) == 4 and s.isdigit()) else ""
 
-        tgt = CAL_SOLAR.lower() if self.database_calendar == CAL_SOLAR else CAL_GREGORIAN.lower()
+    def forward(
+        self,
+        user_prompt: str,
+        target_calendar: Optional[str] = None
+    ) -> List[Tuple[str, str, str, str]]:
+        if target_calendar:
+            self.target_calendar = self._norm_calendar(target_calendar)
 
-        # If granularity is day → exact convert.
-        if gran == "day" and y and m and d:
+        # 1) Extract raw dates from prompt
+        out = self.extract(user_prompt=user_prompt)
+        dates_dict: Dict[str, Dict[str, str]] = getattr(out, "dates", {}) or {}
+
+        results: List[Tuple[str, str, str, str]] = []
+
+        for original_text, parts in dates_dict.items():
+            title = (original_text or "").strip()
+            if not title:
+                continue  # skip empty titles
+
+            source_cal = self._norm_calendar(parts.get("source_calendar"))
+            day = self._norm_day(parts.get("day"))
+            month = self._norm_month(parts.get("month"))
+            year = self._norm_year(parts.get("year"))
+
             try:
-                if src == "jalali" and tgt == "gregorian":
-                    g = jalali_to_gregorian(y, m, d)
-                    norm = format_iso(g.year, g.month, g.day)
-                elif src == "gregorian" and tgt == "jalali":
-                    j = gregorian_to_jalali(y, m, d)
-                    norm = format_iso(j.year, j.month, j.day)
-                else:
-                    # already in target calendar
-                    norm = format_iso(y, m, d)
+                conv = convert_calendar(
+                    source_calendar=source_cal,
+                    target_calendar=self.target_calendar,
+                    day=day,
+                    month=month,
+                    year=year,
+                )
             except Exception as exc:
-                logger.debug("Date conversion failed for %s → %s: %s", text, tgt, exc)
-                norm = format_iso(y, m, d)  # fallback: keep as-is
-        # Month granularity → convert first day, then keep YYYY-MM in target.
-        elif gran == "month" and y and m:
-            try:
-                if src == "jalali" and tgt == "gregorian":
-                    g = jalali_to_gregorian(y, m, 1)
-                    # Normalize as YYYY-MM in target calendar
-                    norm = f"{g.year:04d}-{g.month:02d}"
-                elif src == "gregorian" and tgt == "jalali":
-                    j = gregorian_to_jalali(y, m, 1)
-                    norm = f"{j.year:04d}-{j.month:02d}"
-                else:
-                    norm = f"{y:04d}-{m:02d}"
-            except Exception as exc:
-                logger.debug("Month conversion failed for %s → %s: %s", text, tgt, exc)
-                norm = f"{y:04d}-{m:02d}"
-        # Year-only → convert first day of year, then keep YYYY in target.
-        elif gran == "year" and y:
-            try:
-                if src == "jalali" and tgt == "gregorian":
-                    g = jalali_to_gregorian(y, 1, 1)
-                    norm = f"{g.year:04d}"
-                elif src == "gregorian" and tgt == "jalali":
-                    j = gregorian_to_jalali(y, 1, 1)
-                    norm = f"{j.year:04d}"
-                else:
-                    norm = f"{y:04d}"
-            except Exception as exc:
-                logger.debug("Year conversion failed for %s → %s: %s", text, tgt, exc)
-                norm = f"{y:04d}"
-        else:
-            # Unknown granularity or insufficient parts — leave unchanged
-            norm = text
-
-        meta = {
-            "original": text, "normalized": norm, "granularity": gran,
-            "src_calendar": src, "tgt_calendar": tgt, "status": "ok"
-        }
-        return norm, meta
-
-    def forward(self, user_prompt: str) -> tuple[str, list[dict]]:
-        """
-        1) Ask LLM to detect/plan date conversions.
-        2) Convert with jdatetime.
-        3) Replace the detected spans inline (first occurrence per span).
-        """
-        if not user_prompt:
-            return user_prompt, []
-
-        # Keep a digits-normalized copy to help later stages, but we always replace on the original text
-        planned = self.detect(
-            original_prompt=user_prompt,
-            database_calendar=self.database_calendar
-        )
-
-        try:
-            items = json.loads(planned.items_json or "[]")
-            if not isinstance(items, list):
-                items = []
-        except Exception:
-            items = []
-
-        normalized_prompt = user_prompt
-        metadata: list[dict] = []
-
-        # Replace one-by-one to avoid shifting indices; escape literal text
-        for item in items:
-            norm_str, meta = self._convert_one(item)
-            metadata.append(meta)
-
-            original_span = item.get("text", "")
-            if not original_span:
+                logger.exception("Calendar conversion error for %r: %s", title, exc)
                 continue
 
-            # Only replace the first occurrence to stay aligned with the user's intent
-            try:
-                pattern = re.escape(original_span)
-                normalized_prompt, n = re.subn(pattern, norm_str, normalized_prompt, count=1)
-                if n == 0:
-                    # Try again with digit-normalized variant (covers Eastern digits)
-                    alt = normalize_eastern_digits(original_span)
-                    if alt != original_span:
-                        pattern = re.escape(alt)
-                        normalized_prompt = re.sub(pattern, norm_str, normalized_prompt, count=1)
-            except re.error:
-                # If regex fails, skip replacement
-                pass
+            if not isinstance(conv, dict) or (conv.get("kind") or "").lower() == "invalid":
+                logger.debug("Skipping invalid conversion for %r", title)
+                continue
 
-        # Also normalize number digits globally to reduce translation errors (optional, mild)
-        normalized_prompt = normalize_eastern_digits(normalized_prompt)
+            # Prefer 'date' string if available; fallback to 'parsed'
+            converted_date = ""
+            if isinstance(conv.get("date"), str):
+                converted_date = conv["date"]
+            elif isinstance(conv.get("parsed"), str):
+                converted_date = conv["parsed"]
 
-        # Log a compact summary
-        if metadata:
-            logger.debug("🗓️ DateNormalizer applied %d conversion(s): %s",
-                         len(metadata),
-                         "; ".join([f"{m['original']}→{m['normalized']}" for m in metadata]))
-        else:
-            logger.debug("🗓️ DateNormalizer found no convertible dates")
+            results.append((source_cal, self.target_calendar, title, converted_date))
 
-        return normalized_prompt, metadata
+        return results
+    
 
+class NormalizeDatesTranslate(Module):
+    """
+    Replace original date substrings with converted dates ONLY, then translate.
 
-class TranslatePrompt(Module):
-    """Translate to English (or passthrough) and detect the language."""
+    - If the prompt is already English, just return the replaced text.
+    - Otherwise, translate the replaced text to English.
+    - Language detection is returned by the LLM (via NormalizeDatesTranslateSig).
+    """
 
     def __init__(self):
         super().__init__()
-        self.pred = Predict(TranslatePromptSig)
+        self.pred = Predict(NormalizeDatesTranslateSig)
 
-    def forward(self, user_prompt: str) -> tuple[str, str]:
-        out = self.pred(user_prompt=user_prompt)
-        logger.debug(
-            "🌐 TranslatePrompt: %s→%s chars", len(user_prompt), len(out.english_prompt)
-        )
-        logger.debug("📜 Translated prompt:\n%s\n", out.english_prompt)
-        logger.debug("🗣 Detected language: %s", out.language)
+    @staticmethod
+    def _replace_with_converted(
+        text: str, pairs: List[Tuple[str, str, str, str]]
+    ) -> str:
+        """
+        For each (src_cal, tgt_cal, original_text, converted_date),
+        replace ALL exact occurrences of original_text with converted_date ONLY.
+        Longer originals are processed first to avoid partial overlaps.
+        """
+        if not pairs:
+            return text
+
+        # Sort by length of original_text desc to avoid nested/partial replacements
+        pairs_sorted = sorted(pairs, key=lambda t: len(t[2] or ""), reverse=True)
+
+        out = text
+        for _, _, original, converted in pairs_sorted:
+            if not original or not converted:
+                continue
+            pattern = re.compile(re.escape(original), flags=re.UNICODE)
+            out, n = pattern.subn(converted, out)
+            if n > 0:
+                logger.debug("Replaced %d occurrence(s) of %r → %r", n, original, converted)
+        return out
+
+    def forward(
+        self,
+        user_prompt: str,
+        converted_dates: Optional[List[Tuple[str, str, str, str]]] = None,
+    ) -> tuple[str, str]:
+        pairs = converted_dates or []
+
+        # Do deterministic replacement locally for robustness,
+        # then let the LLM detect language + (if needed) translate.
+        replaced = self._replace_with_converted(user_prompt, pairs)
+
+        out = self.pred(user_prompt=replaced, converted_dates=pairs)
+
+        logger.debug("🌐 NormalizeDatesTranslate: %s→%s chars", len(replaced), len(out.english_prompt))
+        logger.debug("📜 English prompt:\n%s\n", out.english_prompt)
+        logger.debug("🗣 Original language: %s", out.language)
+
         return out.english_prompt, out.language
 
 
@@ -671,3 +752,4 @@ class MakeReportQuery(Module):
         human_sql = extract_sql(out.readable_sql)
         summary = out.report
         return human_sql, summary
+
