@@ -347,6 +347,107 @@ class RefineSqlSig(Signature):
     improved_sql: str = OutputField(desc="Corrected SQL query")
 
 
+class DFSummarySig(Signature):
+    """
+    Produce a crisp, 2-3 lines summary of what a dataframe likely contains.
+
+    Instructions for the LLM:
+    - You are given:
+        • df_head: first few rows as {column: [values, ...]}
+        • user_prompt: the initial user request that led to this dataframe
+    - Write EXACTLY TWO lines (no bullets, no numbering, no extra lines).
+    - Do NOT invent columns or stats you cannot see.
+    - Keep each line brief and readable.
+    """
+
+    df_head: Dict[str, List[Any]] = InputField(desc="First few rows as dict of lists")
+    user_prompt: str = InputField(desc="Initial user prompt that led to this dataframe")
+    summary: str = OutputField(desc="Two to three lines of summary text")
+
+
+class VizPlanSig(Signature):
+    """
+    Plan one or more plots to best visualize a dataframe.
+
+    Instructions for the LLM:
+    - READ CAREFULLY: You are a planner. You do not compute aggregates; you SPECIFY them.
+    - You receive:
+        - df_head: a dict of {column: [sample values]} for the first few rows
+        - dtypes: a dict of {column: inferred_type} where inferred_type in
+                  {"numeric","categorical","datetime","boolean","unknown"}
+        - n_rows: total row count in the dataframe
+        - description: natural language description of what the dataframe contains and what the user cares about
+        - max_plans: maximum number of plots you should plan
+    - Your job: Propose up to `max_plans` plots that effectively show the data.
+      Each planned plot must include:
+        - "plot_id": short id (e.g. "plot_1")
+        - "plot_type": one of {"plot","bar","scatter","hist","pie","box"}
+        - "description": a concise sentence of what the plot should show
+        - "aggregate": boolean
+        - "groupby": list[str] of columns to group by (empty if none)
+        - "measures": list of { "field": <col>, "agg": <"sum"|"mean"|"count"|"min"|"max"|"median"> }
+        - "series_by": optional str column to produce multiple series (lines/bars) in the same plot
+        - "filters": optional list of filter clauses, e.g. [{"field":"country","op":"==","value":"US"}]
+        - "sort_by": optional {"field": <col>, "order": "asc"|"desc"}
+        - "limit": optional integer (top-k after sort)
+        - "notes": optional guidance that helps the next stage choose axes/encodings
+      Examples:
+        - A histogram does not need measures; set aggregate=false unless you need pre-binning counts by subgroups.
+        - A pie chart typically needs a categorical groupby with a count or sum measure.
+        - A line plot often needs a datetime x-axis and a numeric y (possibly aggregated by date).
+        - A box plot usually needs a numeric measure and an optional categorical groupby.
+
+    - STRICT OUTPUT: Return ONLY a compact JSON object with this shape:
+        {
+          "plans": [
+            { ... }, { ... }
+          ]
+        }
+      No commentary, no markdown.
+    """
+
+    df_head: Dict[str, List[Any]] = InputField(desc="First few rows as dict of lists")
+    dtypes: Dict[str, str] = InputField(desc="Inferred column types")
+    n_rows: int = InputField(desc="Total number of rows")
+    description: str = InputField(desc="What the dataframe represents and what the user wants")
+    max_plans: int = InputField(desc="Maximum number of plots to plan")
+    plans_json: str = OutputField(desc="JSON string with a 'plans' list")
+
+
+class VizSpecSig(Signature):
+    """
+    Map a planned plot + dataframe schema into Matplotlib-ready field mappings.
+
+    Instructions for the LLM:
+    - You receive:
+        - plan: one plan item from the planner (dict)
+        - df_head: dict of {column: [sample values]} for the (aggregated or original) dataframe the plot will use
+        - dtypes: dict of {column: inferred_type} for the same dataframe
+        - n_rows: row count for that dataframe
+    - Your job: Produce a Matplotlib mapping that the drawer can use. Keep it minimal and valid.
+    - REQUIRED OUTPUT KEYS:
+        - "plot_type": one of {"plot","bar","scatter","hist","pie","box"}
+        - "mappings": dict of fields relevant to the plot_type, e.g.:
+            For "plot" (line): {"x": "<col>", "y": "<numeric_col>", "series_by": "<optional col>", "order_by": "<x col>"}
+            For "bar": {"x": "<cat_or_bin_col>", "y": "<numeric_col>", "series_by": "<optional col>", "stacked": true|false}
+            For "scatter": {"x": "<numeric_col>", "y": "<numeric_col>", "hue": "<optional col>", "size": "<optional col>"}
+            For "hist": {"x": "<numeric_col>", "bins": 30, "by": "<optional categorical to draw multiple histograms>"}
+            For "pie": {"labels": "<cat_col>", "sizes": "<numeric_or_count_col>"}
+            For "box": {"x": "<optional cat col>", "y": "<numeric col>", "by": "<optional grouping col>"}
+        - "title": short title
+        - "annotations": optional list of strings (notes for the drawer)
+    - DO NOT invent columns that don't exist.
+    - If plan specifies filters/limit/sort were applied upstream, do not repeat them.
+    - STRICT OUTPUT: Return ONLY a compact JSON object with keys: plot_type, mappings, title, annotations
+    """
+
+    plan: Dict[str, Any] = InputField(desc="Single plan item from VizPlanSig")
+    df_head: Dict[str, List[Any]] = InputField(desc="First few rows for the data to plot")
+    dtypes: Dict[str, str] = InputField(desc="Inferred types for columns in df_head")
+    n_rows: int = InputField(desc="Row count of data to plot")
+    spec_json: str = OutputField(desc="JSON with plot_type, mappings, title, annotations")
+
+
 class ReportSig(Signature):
     """
     Turn a validated SQL query into a reader-friendly report query

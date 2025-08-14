@@ -1,6 +1,6 @@
 import sqlalchemy as sa
 import pandas as pd
-from typing import Dict, List, Tuple
+from typing import List, Tuple, Dict, Any
 
 from dspy import Module
 import dspy
@@ -18,6 +18,8 @@ from components.dspy_modules import (
     ColumnSelector,
     GenerateSQL,
     ValidateAndRepairSQL,
+    SummarizeDataFrameHead,
+    VisualizeDataFrame,
     MakeReportQuery
 )
 from components.utils.helpers import (
@@ -44,6 +46,9 @@ class Text2SQLFlow(Module):
         self.max_columns_per_table = 10
         self.max_sql_tables = 12
 
+        self.report_max_chars = 400
+        self.report_max_plot = 2
+
         self.gate = QuickText2SQLGate(min_confidence_true=0.2)
         self.convert_dates = ConvertDates(target_calendar=self.database_calendar)
         self.translate = NormalizeDatesTranslate()
@@ -56,9 +61,11 @@ class Text2SQLFlow(Module):
         self.match_columns = ColumnSelector(self.engine)
         self.generate_sql_draft = GenerateSQL()
         self.validate = ValidateAndRepairSQL(self.engine)
+        self.summarize = SummarizeDataFrameHead()
+        self.visualize = VisualizeDataFrame()
         self.report = MakeReportQuery()
 
-    def forward(self, user_prompt: str) -> Tuple[pd.DataFrame, str, str]:
+    def forward(self, user_prompt: str) -> Tuple[pd.DataFrame, str, str, Dict[str, Any]]:
 
         # Sanity checks
         is_sql_request, gate_confidence, gate_cause = self.gate(user_prompt)
@@ -101,9 +108,12 @@ class Text2SQLFlow(Module):
             user_prompt=user_prompt, sql_prompt=sql_ready, sql=sql_draft, table_columns=column_map, relations=relations
         )
 
-        # Report preparation
-        readable_sql, summary = self.report(
-            user_prompt=user_prompt, sql_prompt=sql_ready, sql=working_sql
-        )
+        # Report and Visualization
+        summary = self.summarize(df_head=df.head(5).to_dict(orient="list"), user_prompt=english_prompt)
 
-        return df, readable_sql, summary
+        if df is None or df.empty:
+            viz = {"figures": [], "labels": [], "artifacts": []}
+        else:
+            viz = self.visualize(df=df, description=summary, max_plots=self.report_max_plot)
+
+        return df, working_sql, summary, viz

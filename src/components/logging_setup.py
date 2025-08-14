@@ -15,6 +15,10 @@ NOISY_LOGGERS: tuple[str, ...] = (
     "httpcore",
     "openai",
     "openai._base_client",
+    "PIL",
+    "PIL.PngImagePlugin",
+    "matplotlib",
+    "matplotlib.font_manager",
 )
 
 

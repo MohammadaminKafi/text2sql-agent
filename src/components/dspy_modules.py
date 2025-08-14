@@ -3,8 +3,9 @@ import re
 import json
 import sqlalchemy as sa
 import pandas as pd
+import matplotlib as plt
 from collections import defaultdict
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 
 from dspy import Module, Predict, ChainOfThought
 
@@ -23,6 +24,9 @@ from components.dspy_signatures import (
     GenSqlSig,
     EvaluateSig,
     RefineSqlSig,
+    DFSummarySig,
+    VizPlanSig,
+    VizSpecSig,
     ReportSig
 )
 from components.utils.date_utils import (
@@ -35,6 +39,12 @@ from components.utils.helpers import (
     is_sql_valid,
     execute_query,
     ask_user,
+)
+from components.utils.vis_utils import (
+    infer_schema,
+    head_as_dict,
+    aggregate_dataframe,
+    draw_plot
 )
 
 logger = logging.getLogger(__name__)
@@ -165,7 +175,7 @@ class QuickText2SQLGate(Module):
                     is_sql, conf, conf_raw, cause or "—")
         return is_sql, conf, cause
     
-
+#--------------- Prompt reforming Stage
 class ConvertDates(Module):
     """
     Apply ExtractDatesSig to the prompt, convert each date to the target calendar,
@@ -430,7 +440,7 @@ class PromptClarifier(Module):
         logger.debug("📝 Clarified prompt:\n%s\n", out.clarified_prompt)
         return out.clarified_prompt
 
-
+#--------------- Schema Inspection Stage
 class KeywordExtractor(Module):
     """Extract field-like keywords (ignore literal values)."""
 
@@ -664,7 +674,7 @@ class ColumnSelector(Module):
 
         return out_map
 
-
+#--------------- SQL Generation Stage
 class GenerateSQL(Module):
     """Create first-draft SQL using only column and relation context."""
 
@@ -746,6 +756,160 @@ class ValidateAndRepairSQL(Module):
         raise RuntimeError("Could not craft a valid SQL query.")
     
 
+class SummarizeDataFrameHead(Module):
+    """Module that calls DFHeadSummarySig and enforces the two-line constraint."""
+
+    def __init__(self):
+        super().__init__()
+        self.summarizer = ChainOfThought(DFSummarySig)
+
+    def forward(self, df_head: Dict[str, List[Any]], user_prompt: str, max_line_len: int = 300) -> str:
+        """
+        Args:
+            df_head: {column: [sample values]} for the head of the dataframe
+            user_prompt: the initial NL request
+            max_line_len: soft cap per line (will trim if exceeded)
+
+        Returns:
+            Summary string.
+        """
+        summary = self.summarizer(df_head=df_head, user_prompt=user_prompt).summary
+        logger.info("🧾 SummarizeDataFrameHead produced %d chars", len(summary))
+        return summary
+
+#--------------- Visualization Stage
+class PlanVisualizations(Module):
+    """LLM planner that proposes plot plans."""
+
+    def __init__(self):
+        super().__init__()
+        self.plan = ChainOfThought(VizPlanSig)
+
+    def forward(
+        self,
+        df_head: Dict[str, List[Any]],
+        dtypes: Dict[str, str],
+        n_rows: int,
+        description: str,
+        max_plans: int = 3,
+    ) -> List[Dict[str, Any]]:
+        out = self.plan(
+            df_head=df_head,
+            dtypes=dtypes,
+            n_rows=n_rows,
+            description=description,
+            max_plans=max_plans,
+        ).plans_json
+        plans_obj = json.loads(out)
+        plans = plans_obj.get("plans", [])
+        logger.info("🧭 PlanVisualizations produced %d plan(s)", len(plans))
+        return plans[:max_plans]
+
+
+class MapToMatplotlib(Module):
+    """LLM mapper that converts a plan + (agg)df schema to concrete Matplotlib fields."""
+
+    def __init__(self):
+        super().__init__()
+        self.map = ChainOfThought(VizSpecSig)
+
+    def forward(
+        self,
+        plan: Dict[str, Any],
+        df: pd.DataFrame,
+    ) -> Dict[str, Any]:
+        spec_text = self.map(
+            plan=plan,
+            df_head=head_as_dict(df),
+            dtypes=infer_schema(df),
+            n_rows=len(df),
+        ).spec_json
+        spec = json.loads(spec_text)
+        logger.info("🧩 MapToMatplotlib produced spec for %s", spec.get("plot_type"))
+        return spec
+
+
+class VisualizeDataFrame(Module):
+    """
+    End-to-end DSPy visualization module.
+
+    Flow:
+        1) Plan plots (LLM)
+        2) Aggregate (Python) as needed
+        3) Map to Matplotlib fields (LLM)
+        4) Draw with Matplotlib (Python)
+    Returns a list of matplotlib Figure objects (and optional metadata).
+
+    Safety:
+        - Does not specify colors.
+        - Validates presence of referenced columns.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.planner = PlanVisualizations()
+        self.mapper = MapToMatplotlib()
+
+    def forward(
+        self,
+        df: pd.DataFrame,
+        description: str,
+        max_plots: int = 3,
+    ) -> Dict[str, Any]:
+        # 1) Plan
+        plans = self.planner(
+            df_head=head_as_dict(df),
+            dtypes=infer_schema(df),
+            n_rows=len(df),
+            description=description,
+            max_plans=max_plots,
+        )
+
+        figures: List[Tuple[str, plt.Figure]] = []
+        artifacts: List[Dict[str, Any]] = []
+
+        for plan in plans:
+            try:
+                # 2) Aggregate (if required)
+                working_df = aggregate_dataframe(df, plan)
+
+                # Validate referenced columns early
+                missing_cols = []
+                for k in (plan.get("groupby") or []):
+                    if k not in working_df.columns and k not in df.columns:
+                        missing_cols.append(k)
+                for m in (plan.get("measures") or []):
+                    f = m.get("field")
+                    if f and f not in working_df.columns and f not in df.columns:
+                        missing_cols.append(f)
+                if missing_cols:
+                    logger.warning("Skipping plan due to missing columns: %s", missing_cols)
+                    continue
+
+                # 3) Map to concrete Matplotlib fields
+                spec = self.mapper(plan=plan, df=working_df)
+
+                # 4) Draw
+                fig, ax = draw_plot(working_df, spec)
+                figures.append((plan.get("plot_id", spec.get("title", "plot")), fig))
+                artifacts.append({
+                    "plan": plan,
+                    "spec": spec,
+                    "shape": tuple(working_df.shape),
+                })
+
+            except Exception as e:
+                logger.exception("Plan failed: %s", e)
+                continue
+
+        logger.info("✅ VisualizeDataFrame produced %d figure(s)", len(figures))
+        return {
+            "figures": [f for _, f in figures],
+            "labels": [name for name, _ in figures],
+            "artifacts": artifacts,  # for debugging/inspection
+        }
+
+#--------------- Reporting Stage
 class MakeReportQuery(Module):
     """Transform working SQL into human-readable report + summary."""
 
