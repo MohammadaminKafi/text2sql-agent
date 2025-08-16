@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 logger = logging.getLogger(__name__)
 
 
+MAX_MEASURES_PER_PLOT = 4
+
 # ---------- Utilities ----------
 
 def infer_schema(df: pd.DataFrame) -> Dict[str, str]:

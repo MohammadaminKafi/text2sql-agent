@@ -63,7 +63,7 @@ def main() -> None:
     setup_logging(
         level=LOG_LEVEL_DEBUG,
         console=True,
-        console_truncate_len=100,
+        console_truncate_len=1000,
         log_file=None,
     )
 

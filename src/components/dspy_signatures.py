@@ -1,6 +1,6 @@
 from dspy import Signature, InputField, OutputField
 from typing import Any, Dict, List, Tuple
-
+from components.types.vis_types import PlansOutputTD
 
 # ───────────────────────────  DSPy Signatures  ───────────────────────────── #
 
@@ -355,7 +355,7 @@ class DFSummarySig(Signature):
     - You are given:
         • df_head: first few rows as {column: [values, ...]}
         • user_prompt: the initial user request that led to this dataframe
-    - Write EXACTLY TWO lines (no bullets, no numbering, no extra lines).
+    - Do not use bullets, numbering or extra lines.
     - Do NOT invent columns or stats you cannot see.
     - Keep each line brief and readable.
     """
@@ -369,16 +369,15 @@ class VizPlanSig(Signature):
     """
     Plan one or more plots to best visualize a dataframe.
 
-    Instructions for the LLM:
-    - READ CAREFULLY: You are a planner. You do not compute aggregates; you SPECIFY them.
+    - You are a planner. You do not compute aggregates; you SPECIFY them.
     - You receive:
         - df_head: a dict of {column: [sample values]} for the first few rows
         - dtypes: a dict of {column: inferred_type} where inferred_type in
                   {"numeric","categorical","datetime","boolean","unknown"}
         - n_rows: total row count in the dataframe
-        - description: natural language description of what the dataframe contains and what the user cares about
+        - description: natural language description of what the dataframe contains
         - max_plans: maximum number of plots you should plan
-    - Your job: Propose up to `max_plans` plots that effectively show the data.
+    - Propose up to `max_plans` plots that effectively show the data.
       Each planned plot must include:
         - "plot_id": short id (e.g. "plot_1")
         - "plot_type": one of {"plot","bar","scatter","hist","pie","box"}
@@ -386,24 +385,11 @@ class VizPlanSig(Signature):
         - "aggregate": boolean
         - "groupby": list[str] of columns to group by (empty if none)
         - "measures": list of { "field": <col>, "agg": <"sum"|"mean"|"count"|"min"|"max"|"median"> }
-        - "series_by": optional str column to produce multiple series (lines/bars) in the same plot
-        - "filters": optional list of filter clauses, e.g. [{"field":"country","op":"==","value":"US"}]
         - "sort_by": optional {"field": <col>, "order": "asc"|"desc"}
         - "limit": optional integer (top-k after sort)
-        - "notes": optional guidance that helps the next stage choose axes/encodings
-      Examples:
-        - A histogram does not need measures; set aggregate=false unless you need pre-binning counts by subgroups.
-        - A pie chart typically needs a categorical groupby with a count or sum measure.
-        - A line plot often needs a datetime x-axis and a numeric y (possibly aggregated by date).
-        - A box plot usually needs a numeric measure and an optional categorical groupby.
 
-    - STRICT OUTPUT: Return ONLY a compact JSON object with this shape:
-        {
-          "plans": [
-            { ... }, { ... }
-          ]
-        }
-      No commentary, no markdown.
+    - STRICT OUTPUT: Return ONLY a Python dict with this shape (not JSON):
+        { "plans": [ { ... }, { ... } ] }
     """
 
     df_head: Dict[str, List[Any]] = InputField(desc="First few rows as dict of lists")
@@ -411,7 +397,7 @@ class VizPlanSig(Signature):
     n_rows: int = InputField(desc="Total number of rows")
     description: str = InputField(desc="What the dataframe represents and what the user wants")
     max_plans: int = InputField(desc="Maximum number of plots to plan")
-    plans_json: str = OutputField(desc="JSON string with a 'plans' list")
+    plans: PlansOutputTD = OutputField(desc="Dict with a 'plans' list of planned plots")
 
 
 class VizSpecSig(Signature):
@@ -437,7 +423,7 @@ class VizSpecSig(Signature):
         - "title": short title
         - "annotations": optional list of strings (notes for the drawer)
     - DO NOT invent columns that don't exist.
-    - If plan specifies filters/limit/sort were applied upstream, do not repeat them.
+    - If plan specifies limit/sort were applied upstream, do not repeat them.
     - STRICT OUTPUT: Return ONLY a compact JSON object with keys: plot_type, mappings, title, annotations
     """
 

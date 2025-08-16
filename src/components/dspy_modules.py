@@ -1,11 +1,12 @@
 import logging
 import re
 import json
+import textwrap
 import sqlalchemy as sa
 import pandas as pd
 import matplotlib as plt
 from collections import defaultdict
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any, DefaultDict
 
 from dspy import Module, Predict, ChainOfThought
 
@@ -46,6 +47,7 @@ from components.utils.vis_utils import (
     aggregate_dataframe,
     draw_plot
 )
+from components.utils.vis_utils import MAX_MEASURES_PER_PLOT
 
 logger = logging.getLogger(__name__)
 
@@ -587,12 +589,36 @@ class ColumnSelector(Module):
     {schema: {table: [(col, dtype), …]}}
     """
 
+    _SUMMARY_ITEMS = 4  # how many columns to show per table in the summary
+
     def __init__(self, engine: sa.Engine, pass_all: bool = True, pass_all_cols: bool = True):
         super().__init__()
         self.engine = engine
         self.pass_all = pass_all
         self.pass_all_cols = pass_all_cols
         self.pred = Predict(TableColumnSig)
+
+    def _compact_dtype(self, dt: Any) -> str:
+        """Strip noisy COLLATE/quotes and condense whitespace."""
+        s = "UNKNOWN" if dt is None else str(dt)
+        s = re.sub(r'\s+COLLATE\s+"[^"]*"', "", s, flags=re.IGNORECASE)
+        s = re.sub(r'\s+COLLATE\s+\S+', "", s, flags=re.IGNORECASE)
+        s = s.replace('"', "")
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
+    def _format_table_summary(self, table: str, cols: List[Tuple[str, str]]) -> str:
+        head = f"• {table} [{len(cols)}]: "
+        parts = [f"{name} {self._compact_dtype(dtype)}" for name, dtype in cols[: self._SUMMARY_ITEMS]]
+        if len(cols) > self._SUMMARY_ITEMS:
+            parts.append(f"+{len(cols) - self._SUMMARY_ITEMS} more")
+        return head + ", ".join(parts)
+
+    def _format_schema_block(self, schema: str, tables: Dict[str, List[Tuple[str, str]]]) -> str:
+        out = [f"{schema} — {len(tables)} table{'s' if len(tables)!=1 else ''}"]
+        for tbl, cols in tables.items():
+            out.append("  " + self._format_table_summary(tbl, cols))
+        return "\n".join(out)
 
     def forward(
         self,
@@ -622,10 +648,7 @@ class ColumnSelector(Module):
                     for col_tuple in col_pairs:
                         if col_tuple not in out_map[schema][table]:
                             out_map[schema][table].append(col_tuple)
-                    logger.debug(
-                        "   ↳ pass_all=True: returning ALL columns for %s.%s (%d cols)",
-                        schema, table, len(col_pairs),
-                    )
+                    logger.debug("   ↳ pass_all=True: %s.%s → ALL (%d cols)", schema, table, len(col_pairs))
                     continue
 
                 # 3) Otherwise, consult the LLM
@@ -646,8 +669,8 @@ class ColumnSelector(Module):
                         if col_tuple not in out_map[schema][table]:
                             out_map[schema][table].append(col_tuple)
                     logger.debug(
-                        "   ↳ pass_all_cols=True and LLM found %d related in %s.%s → returning ALL (%d cols)",
-                        len(col_names), schema, table, len(col_pairs),
+                        "   ↳ pass_all_cols=True: %s.%s (LLM found %d) → ALL (%d cols)",
+                        schema, table, len(col_names), len(col_pairs),
                     )
                     continue
 
@@ -657,18 +680,19 @@ class ColumnSelector(Module):
                     col_tuple = (name, dtype_map.get(name, "UNKNOWN"))
                     if col_tuple not in out_map[schema][table]:
                         out_map[schema][table].append(col_tuple)
-                        logger.debug(
-                            "   ↳ %-18s → %s.%s.%s",
-                            sql_prompt[:15] + ("…" if len(sql_prompt) > 15 else ""),
-                            schema, table, col_tuple,
-                        )
+                        logger.debug("   ↳ selected: %s.%s.%s", schema, table, col_tuple)
 
+        # ---------- Always-summary result logging ----------
         if out_map:
-            logger.debug("📤 ColumnSelector result:")
+            num_schemas = len(out_map)
+            num_tables = sum(len(tables) for tables in out_map.values())
+            num_cols = sum(len(cols) for tables in out_map.values() for cols in tables.values())
+            logger.debug("📤 ColumnSelector result: %d schema(s), %d table(s), %d column(s)",
+                         num_schemas, num_tables, num_cols)
+
             for schema, tables in out_map.items():
-                logger.debug("   %s", schema)
-                for tbl, cols in tables.items():
-                    logger.debug("      %s: %s", tbl, cols)
+                block = self._format_schema_block(schema, tables)
+                logger.debug("\n%s", block)
         else:
             logger.debug("📤 ColumnSelector result: ∅ (no columns selected)")
 
@@ -779,11 +803,36 @@ class SummarizeDataFrameHead(Module):
 
 #--------------- Visualization Stage
 class PlanVisualizations(Module):
-    """LLM planner that proposes plot plans."""
-
+    """LLM planner that proposes plot plans (uses new typed output from VizPlanSig)."""
+  
     def __init__(self):
         super().__init__()
         self.plan = ChainOfThought(VizPlanSig)
+
+    @staticmethod
+    def _shorten(text: Any, width: int = 140) -> str:
+        if text is None:
+            return ""
+        return textwrap.shorten(str(text), width=width, placeholder="…")
+
+    @staticmethod
+    def _fmt_measures(measures: List[Dict[str, Any]] | None) -> str:
+        if not measures:
+            return "—"
+        parts = []
+        for m in measures:
+            field = m.get("field", "?")
+            agg = m.get("agg", "?")
+            parts.append(f"{agg}({field})")
+        return ", ".join(parts)
+
+    @staticmethod
+    def _fmt_sort(sort_by: Dict[str, Any] | None) -> str:
+        if not sort_by:
+            return "—"
+        field = sort_by.get("field", "?")
+        order = sort_by.get("order", "?")
+        return f"{field} {order}"
 
     def forward(
         self,
@@ -799,10 +848,32 @@ class PlanVisualizations(Module):
             n_rows=n_rows,
             description=description,
             max_plans=max_plans,
-        ).plans_json
-        plans_obj = json.loads(out)
-        plans = plans_obj.get("plans", [])
+        ).plans
+        plans = (out or {}).get("plans", [])
+
         logger.info("🧭 PlanVisualizations produced %d plan(s)", len(plans))
+        for i, p in enumerate(plans, start=1):
+            logger.info(
+                "\n— Plan #%d —\n"
+                "  id        : %s\n"
+                "  type      : %s\n"
+                "  desc      : %s\n"
+                "  aggregate : %s\n"
+                "  groupby   : %s\n"
+                "  measures  : %s\n"
+                "  sort_by   : %s\n"
+                "  limit     : %s",
+                i,
+                p.get("plot_id", "plot_"+str(i)),
+                p.get("plot_type", "plot"),
+                self._shorten(p.get("description", "")),
+                p.get("aggregate", False),
+                ", ".join(p.get("groupby") or []) or "—",
+                self._fmt_measures(p.get("measures")),
+                self._fmt_sort(p.get("sort_by")),
+                p.get("limit", "—"),
+            )
+
         return plans[:max_plans]
 
 
@@ -856,7 +927,7 @@ class VisualizeDataFrame(Module):
         description: str,
         max_plots: int = 3,
     ) -> Dict[str, Any]:
-        # 1) Plan
+        # 1) Plan (now receives typed dict output already handled in PlanVisualizations)
         plans = self.planner(
             df_head=head_as_dict(df),
             dtypes=infer_schema(df),
@@ -924,4 +995,3 @@ class MakeReportQuery(Module):
         human_sql = extract_sql(out.readable_sql)
         summary = out.report
         return human_sql, summary
-
