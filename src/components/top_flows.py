@@ -47,7 +47,7 @@ class Text2SQLFlow(Module):
         self.max_sql_tables = 12
 
         self.report_max_chars = 400
-        self.report_max_plot = 2
+        self.report_max_plot = 1
 
         self.gate = QuickText2SQLGate(min_confidence_true=0.2)
         self.convert_dates = ConvertDates(target_calendar=self.database_calendar)

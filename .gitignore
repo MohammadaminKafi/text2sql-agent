@@ -47,6 +47,8 @@ htmlcov/
 
 # Docs
 docs/*.html
+todo.*
+todo
 
 # Extentions
 .flake8

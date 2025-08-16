@@ -91,8 +91,38 @@ def aggregate_dataframe(df: pd.DataFrame, plan: Dict[str, Any]) -> pd.DataFrame:
     keys = groupby + ([series_by] if series_by else [])
     keys = [k for k in keys if k and k in df2.columns]
 
+    # ---------- NEW: handle global aggregation (no group keys) ----------
+    if not keys:
+        # Build agg map for whole DF
+        agg_map: Dict[str, Any] = {}
+        for m in measures:
+            field = m.get("field")
+            agg = (m.get("agg") or "sum").lower()
+            if field in df2.columns:
+                agg_map.setdefault(field, []).append(agg)
+
+        if not agg_map:
+            # No measures → return a one-row count of all rows
+            grouped = pd.DataFrame({"count": [len(df2)]})
+        else:
+            tmp = df2.agg(agg_map)                 # index = agg funcs, columns = fields
+            # Flatten to single row with columns like "<field>_<agg>"
+            ser = tmp.stack(dropna=False)          # (func, col) -> value
+            flat = {f"{col}_{func}": val for (func, col), val in ser.items()}
+            grouped = pd.DataFrame([flat])
+
+        # sort/limit if applicable
+        sort_by = plan.get("sort_by")
+        if sort_by and sort_by.get("field") in grouped.columns:
+            ascending = sort_by.get("order", "asc") == "asc"
+            grouped = grouped.sort_values(by=sort_by["field"], ascending=ascending)
+        if plan.get("limit"):
+            grouped = grouped.head(int(plan["limit"]))
+        return grouped
+    # -------------------------------------------------------------------
+
+    # Regular grouped aggregation
     if not measures:
-        # default to count
         grouped = df2.groupby(keys, dropna=False).size().reset_index(name="count")
     else:
         agg_map: Dict[str, Any] = {}
