@@ -82,6 +82,7 @@ def main() -> None:
     lm = create_dspy_lm(
         model="openai/gpt-4o-mini",
         api_base="https://api.avalai.ir/v1",
+        temperature=0.3
     )
 
     flow = Text2SQLFlow(engine=engine, lm=lm)
