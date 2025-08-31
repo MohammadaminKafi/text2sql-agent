@@ -1,7 +1,8 @@
 # Custom folders to ignore
 /no_commit_utils/
-/log/
-/test/log/
+*.log
+log/
+**/log/
 /credentials/
 /cache/
 /vdb/

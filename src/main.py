@@ -1,12 +1,11 @@
 import os
 import urllib
 import matplotlib.pyplot as plt
-from logging import DEBUG as LOG_LEVEL_DEBUG
-from sqlalchemy import create_engine
 
-from components.logging_setup import setup_logging
 from components.top_flows import Text2SQLFlow
-from components.utils.llm_utils import create_dspy_lm
+from components.utils.llm_utils import create_dspy_lm, get_llm
+from components.utils.db_utils import create_db_engine
+from components.smartlog import init_logging, create_thread
 
 def show_viz_plots(viz: dict) -> None:
     """
@@ -60,30 +59,12 @@ def show_viz_plots(viz: dict) -> None:
         plt.close("all")
 
 def main() -> None:
-    setup_logging(
-        level=LOG_LEVEL_DEBUG,
-        console=True,
-        console_truncate_len=1000,
-        log_file=None,
-    )
+    init_logging()
+    create_thread("system-init")
 
-    engine_url = "mssql+pyodbc:///?odbc_connect=" + urllib.parse.quote_plus(
-        "DRIVER={ODBC Driver 17 for SQL Server};"
-        "SERVER=localhost;"
-        "DATABASE=AdventureWorks2022;"
-        "Trusted_Connection=yes;"
-    )
+    engine = create_db_engine()
 
-    engine = create_engine(engine_url)
-
-    # ollama_chat/              ->  http://199.168.172.141:11434/v1 (api_key='none')
-    # gemma3:27b                ->  192.168.172.141:11434/v1
-    # openai/gemma-3-27b-it     ->  https://api.avalapis.ir/v1, https://api.avalai.ir/v1
-    lm = create_dspy_lm(
-        model="openai/gpt-4o-mini",
-        api_base="https://api.avalai.ir/v1",
-        temperature=0.3
-    )
+    lm = get_llm("avalai")
 
     flow = Text2SQLFlow(engine=engine, lm=lm)
 
@@ -95,6 +76,7 @@ def main() -> None:
             break
 
         try:
+            create_thread("system-run")
             df, sql, summary, viz = flow(prompt)
             print("\n— Final report SQL —")
             print(sql)

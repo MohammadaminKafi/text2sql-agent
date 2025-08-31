@@ -1,4 +1,3 @@
-import logging
 import re
 import json
 import textwrap
@@ -48,8 +47,9 @@ from components.utils.vis_utils import (
     draw_plot
 )
 from components.utils.vis_utils import MAX_MEASURES_PER_PLOT
+from components.smartlog import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ────────────────────────────  DSPy Modules  ─────────────────────────────── #
 
@@ -146,7 +146,7 @@ class QuickText2SQLGate(Module):
 
     # ---- main ---------------------------------------------------------------
     def forward(self, user_prompt: str) -> tuple[bool, float, str]:
-        logger.debug("🚪 Gate.in: %s chars", len(user_prompt or ""))
+        logger.flowdebug("🚪 Gate.in: %s chars", len(user_prompt or ""))
 
         # Heuristic fast path
         is_sql_h, conf_h, cause_h, decisive = self._heuristic_gate(user_prompt)
@@ -155,10 +155,10 @@ class QuickText2SQLGate(Module):
             conf = conf_h
             cause = cause_h
             if is_sql and conf < self.min_confidence_true:
-                logger.debug("⬆️  Confidence floor applied (heuristic): %.2f → %.2f",
+                logger.flowdebug("⬆️  Confidence floor applied (heuristic): %.2f → %.2f",
                              conf, self.min_confidence_true)
                 conf = self.min_confidence_true
-            logger.info("🚪 Gate.out (heuristic): is_text2sql=%s  conf=%.2f  cause=%s",
+            logger.flowdebug("🚪 Gate.out (heuristic): is_text2sql=%s  conf=%.2f  cause=%s",
                         is_sql, conf, cause or "—")
             return is_sql, conf, cause
 
@@ -170,10 +170,10 @@ class QuickText2SQLGate(Module):
 
         conf = conf_raw
         if is_sql and conf < self.min_confidence_true:
-            logger.debug("⬆️  Confidence floor applied: %.2f → %.2f", conf, self.min_confidence_true)
+            logger.flowdebug("⬆️  Confidence floor applied: %.2f → %.2f", conf, self.min_confidence_true)
             conf = self.min_confidence_true
 
-        logger.info("🚪 Gate.out (LLM): is_text2sql=%s  conf=%.2f (raw=%.2f)  cause=%s",
+        logger.flowdebug("🚪 Gate.out (LLM): is_text2sql=%s  conf=%.2f (raw=%.2f)  cause=%s",
                     is_sql, conf, conf_raw, cause or "—")
         return is_sql, conf, cause
     
@@ -270,7 +270,7 @@ class ConvertDates(Module):
                 continue
 
             if not isinstance(conv, dict) or (conv.get("kind") or "").lower() == "invalid":
-                logger.debug("Skipping invalid conversion for %r", title)
+                logger.flowdebug("Skipping invalid conversion for %r", title)
                 continue
 
             # Prefer 'date' string if available; fallback to 'parsed'
@@ -282,7 +282,7 @@ class ConvertDates(Module):
 
             results.append((source_cal, self.target_calendar, title, converted_date))
 
-        logger.info("🧮 Detected %d date%s", len(results), "" if len(results) == 1 else "s")
+        logger.flowdebug("🧮 Detected %d date%s", len(results), "" if len(results) == 1 else "s")
         if results:
             preview_items = [
                 f"[{src}→{tgt}] {orig} → {conv}"
@@ -291,7 +291,7 @@ class ConvertDates(Module):
             preview = " | ".join(preview_items)
             if len(results) > 5:
                 preview += f" | … +{len(results) - 5} more"
-            logger.info("📅 Date conversions: %s", preview)
+            logger.flowdebug("📅 Date conversions: %s", preview)
 
         return results
   
@@ -331,7 +331,7 @@ class NormalizeDatesTranslate(Module):
             pattern = re.compile(re.escape(original), flags=re.UNICODE)
             out, n = pattern.subn(converted, out)
             if n > 0:
-                logger.debug("Replaced %d occurrence(s) of %r → %r", n, original, converted)
+                logger.flowdebug("Replaced %d occurrence(s) of %r → %r", n, original, converted)
         return out
 
     def forward(
@@ -347,9 +347,9 @@ class NormalizeDatesTranslate(Module):
 
         out = self.pred(user_prompt=replaced, converted_dates=pairs)
 
-        logger.debug("🌐 NormalizeDatesTranslate: %s→%s chars", len(replaced), len(out.english_prompt))
-        logger.debug("📜 English prompt:\n%s\n", out.english_prompt)
-        logger.debug("🗣 Original language: %s", out.language)
+        logger.flowdebug("🌐 NormalizeDatesTranslate: %s→%s chars", len(replaced), len(out.english_prompt))
+        logger.flowdebug("📜 English prompt:\n%s\n", out.english_prompt)
+        logger.flowdebug("🗣 Original language: %s", out.language)
 
         return out.english_prompt, out.language
 
@@ -363,12 +363,12 @@ class SqlPromptCleaner(Module):
 
     def forward(self, english_prompt: str) -> str:
         out = self.pred(user_prompt=english_prompt)
-        logger.debug(
+        logger.flowdebug(
             "🧹 SqlPromptCleaner: %s→%s chars",
             len(english_prompt),
             len(out.sql_ready_prompt),
         )
-        logger.debug("⚙️ SQL-ready prompt:\n%s\n", out.sql_ready_prompt)
+        logger.flowdebug("⚙️ SQL-ready prompt:\n%s\n", out.sql_ready_prompt)
         return out.sql_ready_prompt
 
 
@@ -391,11 +391,11 @@ class AmbiguityResolver(Module):
         out = self.detect(sql_ready_prompt=sql_ready_prompt)
 
         if not out.has_ambiguity:
-            logger.debug("🔎 AmbiguityResolver: no significant ambiguities detected")
+            logger.flowdebug("🔎 AmbiguityResolver: no significant ambiguities detected")
             return {"questions": [], "answers": []}
 
         questions, answers = [], []
-        logger.debug(
+        logger.flowdebug(
             "🤔 AmbiguityResolver detected %s ambiguity(ies)", len(out.ambiguities)
         )
 
@@ -413,7 +413,7 @@ class AmbiguityResolver(Module):
 
             questions.append(question_user_lang)
             answers.append(user_ans)
-            logger.debug("🙋 User answered [%s]: %s → %s", label, question_user_lang, user_ans)
+            logger.flowdebug("🙋 User answered [%s]: %s → %s", label, question_user_lang, user_ans)
 
         return {"questions": questions, "answers": answers}
     
@@ -438,8 +438,8 @@ class PromptClarifier(Module):
             clarification_as=answers,
             clarifications_language=user_language
         )
-        logger.debug("✅ PromptClarifier produced %s chars", len(out.clarified_prompt))
-        logger.debug("📝 Clarified prompt:\n%s\n", out.clarified_prompt)
+        logger.flowdebug("✅ PromptClarifier produced %s chars", len(out.clarified_prompt))
+        logger.flowdebug("📝 Clarified prompt:\n%s\n", out.clarified_prompt)
         return out.clarified_prompt
 
 #--------------- Schema Inspection Stage
@@ -453,7 +453,7 @@ class KeywordExtractor(Module):
 
     def forward(self, sql_ready_prompt: str) -> List[str]:
         out = self.think(sql_prompt=sql_ready_prompt, max_keywords=self.max_keywords)
-        logger.debug(
+        logger.flowdebug(
             "🔑 KeywordExtractor: %s keyword(s) → \n%s\n\n",
             len(out.keywords),
             ", ".join(out.keywords),
@@ -472,7 +472,7 @@ class MatchSchemas(Module):
 
     def forward(self, keywords: List[str]) -> Dict[str, List[str]]:
         db_schemas = list_schemas(self.engine)
-        logger.debug(
+        logger.flowdebug(
             "📥 MatchSchemas: %s keyword(s) %s | %s schema(s) in DB",
             len(keywords),
             keywords,
@@ -499,9 +499,9 @@ class MatchSchemas(Module):
             chosen = [s for s in schemas if s in db_schemas][: self.max_schema_per_kw]
             result[kw].extend(chosen)
 
-            logger.debug("   ↳ %s → %s", kw, chosen or "∅")
+            logger.flowdebug("   ↳ %s → %s", kw, chosen or "∅")
 
-        logger.debug(
+        logger.flowdebug(
             "📤 MatchSchemas result: %s keyword(s) mapped, %s total schema refs",
             len(result),
             sum(len(v) for v in result.values()),
@@ -520,7 +520,7 @@ class MatchTables(Module):
         self.think = ChainOfThought(KeywordTableSig)
 
     def forward(self, schema_map: Dict[str, List[str]]) -> Dict[str, List[str]]:
-        logger.debug(
+        logger.flowdebug(
             "📥 MatchTables: %s keyword(s) → %s schema refs",
             len(schema_map),
             sum(len(v) for v in schema_map.values()),
@@ -533,7 +533,7 @@ class MatchTables(Module):
             for schema in schemata:
                 # candidate table list
                 all_tbls = insp.get_table_names(schema=schema)
-                logger.debug(
+                logger.flowdebug(
                     "🔍 %s | %s: %s table candidates", kw, schema, len(all_tbls)
                 )
 
@@ -555,10 +555,10 @@ class MatchTables(Module):
                 fresh = [t for t in tbls if t not in result[schema]]
                 if fresh:
                     result[schema].extend(fresh)
-                    logger.debug("   ↳ %s → %s.%s", kw, schema, fresh)
+                    logger.flowdebug("   ↳ %s → %s.%s", kw, schema, fresh)
 
         total_tbls = sum(len(v) for v in result.values())
-        logger.debug(
+        logger.flowdebug(
             "📤 MatchTables result: %s schema(s), %s total table refs -> %s",
             len(result),
             total_tbls,
@@ -627,7 +627,7 @@ class ColumnSelector(Module):
     ) -> Dict[str, Dict[str, List[Tuple[str, str]]]]:
 
         total_pairs = sum(len(tables) for tables in table_map.values())
-        logger.debug(
+        logger.flowdebug(
             "📥 ColumnSelector: %s schema(s) → %s (schema,table) pairs",
             len(table_map),
             total_pairs,
@@ -648,7 +648,7 @@ class ColumnSelector(Module):
                     for col_tuple in col_pairs:
                         if col_tuple not in out_map[schema][table]:
                             out_map[schema][table].append(col_tuple)
-                    logger.debug("   ↳ pass_all=True: %s.%s → ALL (%d cols)", schema, table, len(col_pairs))
+                    logger.flowdebug("   ↳ pass_all=True: %s.%s → ALL (%d cols)", schema, table, len(col_pairs))
                     continue
 
                 # 3) Otherwise, consult the LLM
@@ -668,7 +668,7 @@ class ColumnSelector(Module):
                     for col_tuple in col_pairs:
                         if col_tuple not in out_map[schema][table]:
                             out_map[schema][table].append(col_tuple)
-                    logger.debug(
+                    logger.flowdebug(
                         "   ↳ pass_all_cols=True: %s.%s (LLM found %d) → ALL (%d cols)",
                         schema, table, len(col_names), len(col_pairs),
                     )
@@ -680,21 +680,21 @@ class ColumnSelector(Module):
                     col_tuple = (name, dtype_map.get(name, "UNKNOWN"))
                     if col_tuple not in out_map[schema][table]:
                         out_map[schema][table].append(col_tuple)
-                        logger.debug("   ↳ selected: %s.%s.%s", schema, table, col_tuple)
+                        logger.flowdebug("   ↳ selected: %s.%s.%s", schema, table, col_tuple)
 
         # ---------- Always-summary result logging ----------
         if out_map:
             num_schemas = len(out_map)
             num_tables = sum(len(tables) for tables in out_map.values())
             num_cols = sum(len(cols) for tables in out_map.values() for cols in tables.values())
-            logger.debug("📤 ColumnSelector result: %d schema(s), %d table(s), %d column(s)",
+            logger.flowdebug("📤 ColumnSelector result: %d schema(s), %d table(s), %d column(s)",
                          num_schemas, num_tables, num_cols)
 
             for schema, tables in out_map.items():
                 block = self._format_schema_block(schema, tables)
-                logger.debug("\n%s", block)
+                logger.flowdebug("\n%s", block)
         else:
-            logger.debug("📤 ColumnSelector result: ∅ (no columns selected)")
+            logger.flowdebug("📤 ColumnSelector result: ∅ (no columns selected)")
 
         return out_map
 
@@ -717,7 +717,7 @@ class GenerateSQL(Module):
             "relations": relations,
         }
         sql = self.think(sql_prompt=sql_prompt, context=ctx).generated_sql
-        logger.info("📝 GenerateSQL produced %s chars", len(sql))
+        logger.flowdebug("📝 GenerateSQL produced %s chars", len(sql))
         return sql
 
 
@@ -745,7 +745,7 @@ class ValidateAndRepairSQL(Module):
         }
 
         for attempt in range(1, self.max_attempts + 1):
-            logger.info("🔄 Validate attempt %s/%s", attempt, self.max_attempts)
+            logger.flowdebug("🔄 Validate attempt %s/%s", attempt, self.max_attempts)
 
             sql_clean = extract_sql(sql)
             if not is_sql_valid(sql_clean):
@@ -766,10 +766,10 @@ class ValidateAndRepairSQL(Module):
                     cause = ev.cause or ""
 
             if verdict == "VALID":
-                logger.info("✅ SQL validated")
+                logger.flowdebug("✅ SQL validated")
                 return df, sql_clean
 
-            logger.info("🔧 Refining (%s)", cause)
+            logger.flowdebug("🔧 Refining (%s)", cause)
             sql = self.refine(
                 sql_prompt=sql_prompt,
                 last_sql=sql_clean,
@@ -798,7 +798,7 @@ class SummarizeDataFrameHead(Module):
             Summary string.
         """
         summary = self.summarizer(df_head=df_head, user_prompt=user_prompt).summary
-        logger.info("🧾 SummarizeDataFrameHead produced %d chars", len(summary))
+        logger.flowdebug("🧾 SummarizeDataFrameHead produced %d chars", len(summary))
         return summary
 
 #--------------- Visualization Stage
@@ -851,9 +851,9 @@ class PlanVisualizations(Module):
         ).plans
         plans = (out or {}).get("plans", [])
 
-        logger.info("🧭 PlanVisualizations produced %d plan(s)", len(plans))
+        logger.flowdebug("🧭 PlanVisualizations produced %d plan(s)", len(plans))
         for i, p in enumerate(plans, start=1):
-            logger.info(
+            logger.flowdebug(
                 "\n— Plan #%d —\n"
                 "  id        : %s\n"
                 "  type      : %s\n"
@@ -896,7 +896,7 @@ class MapToMatplotlib(Module):
             n_rows=len(df),
         ).spec_json
         spec = json.loads(spec_text)
-        logger.info("🧩 MapToMatplotlib produced spec for %s", spec.get("plot_type"))
+        logger.flowdebug("🧩 MapToMatplotlib produced spec for %s", spec.get("plot_type"))
         return spec
 
 
@@ -973,7 +973,7 @@ class VisualizeDataFrame(Module):
                 logger.exception("Plan failed: %s", e)
                 continue
 
-        logger.info("✅ VisualizeDataFrame produced %d figure(s)", len(figures))
+        logger.flowdebug("✅ VisualizeDataFrame produced %d figure(s)", len(figures))
         return {
             "figures": [f for _, f in figures],
             "labels": [name for name, _ in figures],

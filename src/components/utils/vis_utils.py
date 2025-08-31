@@ -5,8 +5,9 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 import matplotlib.pyplot as plt
 
-logger = logging.getLogger(__name__)
+from components.smartlog import get_logger
 
+logger = get_logger(__name__)
 
 MAX_MEASURES_PER_PLOT = 4
 
@@ -285,7 +286,7 @@ def draw_plot(df: pd.DataFrame, spec: Dict[str, Any]):
             fig.suptitle("")
 
     for note in annotations:
-        logger.info("Note for plot: %s", note)
+        logger.flowdebug("Note for plot: %s", note)
 
     fig.tight_layout()
     return fig, ax

@@ -5,7 +5,9 @@ from typing import Optional
 
 import dspy
 
-logger = logging.getLogger(__name__)
+from components.smartlog import get_logger
+
+logger = get_logger(__name__)
 
 # ───────────────────  Convenience LM creator ─────────────────── #
 def create_dspy_lm(
@@ -22,7 +24,7 @@ def create_dspy_lm(
     api_key = api_key or os.getenv("AvalAI_API_KEY")
     urlparse(api_base)
 
-    logger.debug("🌟 Initialising dspy.LM: model=%s  api_base=%s", model, api_base)
+    logger.sysdebug("🌟 Initialising dspy.LM: model=%s  api_base=%s", model, api_base)
     lm = dspy.LM(
         model=model, 
         api_key=api_key, 
@@ -35,3 +37,37 @@ def create_dspy_lm(
     )
 
     return lm
+
+
+def get_llm(option: str):
+    """
+    Return a configured LLM object based on the given option name.
+    Supported: 'avalai', 'ollama_chat', 'gemma3:27b', 'avalai_gemma', 'lmstudio'.
+    """
+    opt = option.lower().strip()
+
+    if opt == "avalai":
+        return create_dspy_lm(
+            model="openai/gpt-4o-mini",
+            api_base="https://api.avalai.ir/v1",
+            temperature=0.3,
+        )
+
+    elif opt == "ollama":
+        return create_dspy_lm(
+            model="ollama_chat",
+            api_key="none",
+            api_base="http://199.168.172.141:11434/v1",
+            temperature=0.3,
+        )
+
+    elif opt == "lmstudio":
+        return create_dspy_lm(
+            model="openai/",   # adjust model name if needed
+            api_key="none",
+            api_base="http://172.21.54.32:1234/v1",
+            temperature=0.3,
+        )
+
+    else:
+        raise ValueError(f"Unknown LLM option: {option}")
