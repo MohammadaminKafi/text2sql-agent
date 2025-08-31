@@ -21,7 +21,7 @@ def create_dspy_lm(
     num_retries: int = 1
 ):
 
-    api_key = api_key or os.getenv("AvalAI_API_KEY")
+    api_key = api_key or os.getenv("AVALAI_API_KEY")
     urlparse(api_base)
 
     logger.sysdebug("🌟 Initialising dspy.LM: model=%s  api_base=%s", model, api_base)

@@ -1,6 +1,7 @@
 import os
 import urllib
 import matplotlib.pyplot as plt
+from dotenv import load_dotenv
 
 from components.top_flows import BasicText2SQLFlow
 from components.utils.llm_utils import create_dspy_lm, get_llm
@@ -59,10 +60,12 @@ def show_viz_plots(viz: dict) -> None:
         plt.close("all")
 
 def main() -> None:
+    load_dotenv()
+
     init_logging()
     create_thread("system-init")
 
-    engine = create_db_engine()
+    engine = create_db_engine(dbms="snowflake", database="ADVENTUREWORKS")
 
     lm = get_llm("avalai")
 
