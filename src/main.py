@@ -2,7 +2,7 @@ import os
 import urllib
 import matplotlib.pyplot as plt
 
-from components.top_flows import Text2SQLFlow
+from components.top_flows import BasicText2SQLFlow
 from components.utils.llm_utils import create_dspy_lm, get_llm
 from components.utils.db_utils import create_db_engine
 from components.smartlog import init_logging, create_thread
@@ -66,7 +66,7 @@ def main() -> None:
 
     lm = get_llm("avalai")
 
-    flow = Text2SQLFlow(engine=engine, lm=lm)
+    flow = BasicText2SQLFlow(engine=engine, lm=lm)
 
     while True:
         try:
@@ -84,7 +84,7 @@ def main() -> None:
             print(df.head())
             print("\n— Summary —")
             print(summary)
-            show_viz_plots(viz)
+            # show_viz_plots(viz)
         except Exception as exc:
             print(f"💥 Failed to satisfy prompt: {exc}")
 

@@ -29,14 +29,25 @@ from components.utils.helpers import (
 # ───────────────────────────  Orchestrator  ──────────────────────────────
 
 
-class Text2SQLFlow(Module):
+class BasicText2SQLFlow(Module):
     """Full pipeline: NL → SQL → validated report."""
 
-    def __init__(self, engine: sa.Engine, lm: dspy.LM):
+    def __init__(
+            self, 
+            engine: sa.Engine, 
+            lm: dspy.LM, 
+            generate_summary: bool = False, 
+            generate_viz: bool = False
+        ):
+
         super().__init__()
         dspy.configure(lm=lm)
 
         self.engine = engine
+
+        # Configs
+        self.generate_summary = generate_summary
+        self.generate_viz = generate_viz
 
         self.database_calendar = "Gregorian"
 
@@ -49,6 +60,7 @@ class Text2SQLFlow(Module):
         self.report_max_chars = 400
         self.report_max_plot = 1
 
+        # Modules
         self.gate = QuickText2SQLGate(min_confidence_true=0.2)
         self.convert_dates = ConvertDates(target_calendar=self.database_calendar)
         self.translate = NormalizeDatesTranslate()
@@ -109,11 +121,17 @@ class Text2SQLFlow(Module):
         )
 
         # Report and Visualization
-        summary = self.summarize(df_head=df.head(5).to_dict(orient="list"), user_prompt=english_prompt)
-
-        if df is None or df.empty:
-            viz = {"figures": [], "labels": [], "artifacts": []}
+        if self.generate_summary:
+            summary = self.summarize(df_head=df.head(5).to_dict(orient="list"), user_prompt=english_prompt)
         else:
-            viz = self.visualize(df=df, description=summary, max_plots=self.report_max_plot)
+            summary = ""
+
+        if self.generate_viz:
+            if df is None or df.empty:
+                viz = {"figures": [], "labels": [], "artifacts": []}
+            else:
+                viz = self.visualize(df=df, description=summary, max_plots=self.report_max_plot)
+        else:
+            viz = {"figures": [], "labels": [], "artifacts": []}
 
         return df, working_sql, summary, viz
