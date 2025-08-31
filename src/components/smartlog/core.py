@@ -8,7 +8,7 @@ from .levels import install_custom_levels
 from .levels import (
     LVL_LIB_LLM_DEBUG, LVL_LIB_DEBUG,
 )
-from .filters import TruncateLongMsgs, LevelWhitelistFilter, RemapLevelFilter
+from .filters import TruncatingFormatter, LevelWhitelistFilter, RemapLevelFilter
 from .files import slugify, ensure_dir, rebuild_file_handlers
 from .state import (
     state,
@@ -65,12 +65,11 @@ def init_logging(
     if console:
         ch = logging.StreamHandler()
         ch.setLevel(logging.DEBUG)
-        ch.setFormatter(state.formatter)
+        ch.setFormatter(TruncatingFormatter(fmt=fmt, datefmt=datefmt, max_len=console_truncate_len))
         allowed = set(CONSOLE_WHITELIST)
         if not console_include_warnings_errors:
             allowed -= {logging.WARNING, logging.ERROR, logging.CRITICAL}
         ch.addFilter(LevelWhitelistFilter(allowed))
-        ch.addFilter(TruncateLongMsgs(console_truncate_len))
         root.addHandler(ch)
         state.handlers.console = ch
 
@@ -105,4 +104,5 @@ def get_active_thread_dir():
 
 
 def get_logger(name: Optional[str] = None) -> logging.Logger:
+    return logging.getLogger(name if name else __name__)
     return logging.getLogger(name if name else __name__)

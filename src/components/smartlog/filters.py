@@ -23,6 +23,29 @@ class TruncateLongMsgs(logging.Filter):
         return True
 
 
+class TruncatingFormatter(logging.Formatter):
+    """Console-only formatter that truncates the message without affecting other handlers."""
+
+    def __init__(self, fmt: str | None = None, datefmt: str | None = None, style: str = "%", max_len: int = 300):
+        super().__init__(fmt=fmt, datefmt=datefmt, style=style)
+        self.max_len = max_len
+
+    def format(self, record: logging.LogRecord) -> str:
+        if self.max_len <= 0:
+            return super().format(record)
+        # Preserve original values
+        orig_msg, orig_args = record.msg, record.args
+        try:
+            full_msg = record.getMessage()
+            if len(full_msg) > self.max_len:
+                record.msg = full_msg[: self.max_len] + " …(truncated)"
+                record.args = ()
+            return super().format(record)
+        finally:
+            # Restore original values so file handlers see the full message
+            record.msg, record.args = orig_msg, orig_args
+
+
 class LevelWhitelistFilter(logging.Filter):
     """Allow only specific levels."""
 
