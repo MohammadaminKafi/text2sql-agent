@@ -41,16 +41,19 @@ class BasicText2SQLFlow(Module):
         ):
 
         super().__init__()
-        dspy.configure(lm=lm)
 
+        # Global configurations
+        dspy.configure(lm=lm)
         self.engine = engine
 
-        # Configs
+        # Report configurations
         self.generate_summary = generate_summary
         self.generate_viz = generate_viz
 
+        # Database configurations
         self.database_calendar = "Gregorian"
 
+        # Module configurations
         self.max_keywords = 3
         self.max_schema_per_keyword = 1
         self.max_table_per_schema = 4
