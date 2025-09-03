@@ -1,7 +1,7 @@
 import pytest
 import urllib
 from sqlalchemy import create_engine
-from components.utils.llm_utils import create_dspy_lm
+from core.utils.llm_utils import create_dspy_lm
 
 
 def pytest_addoption(parser):

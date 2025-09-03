@@ -1,8 +1,6 @@
-# tests/llm/test_quick_gate_sig_llm.py
-
 import pytest
 import dspy
-from components.dspy_signatures import QuickGateSig
+from core.agent_core.basic.signatures import QuickGateSig
 
 
 @pytest.fixture(scope="module")

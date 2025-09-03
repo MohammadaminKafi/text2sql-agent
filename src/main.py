@@ -3,10 +3,10 @@ import urllib
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 
-from components.top_flows import BasicText2SQLFlow
-from components.utils.llm_utils import create_dspy_lm, get_llm
-from components.utils.db_utils import create_db_engine
-from components.smartlog import init_logging, create_thread
+from core.agent_core.basic.top_flow import BasicText2SQLFlow
+from core.utils.llm_utils import create_dspy_lm, get_llm
+from core.utils.db_utils import create_db_engine
+from core.smartlog import init_logging, create_thread
 
 def show_viz_plots(viz: dict) -> None:
     """
@@ -65,7 +65,7 @@ def main() -> None:
     init_logging()
     create_thread("system-init")
 
-    engine = create_db_engine(dbms="snowflake", database="ADVENTUREWORKS")
+    engine = create_db_engine(dbms="mssql", database="ADVENTUREWORKS")
 
     lm = get_llm("avalai")
 

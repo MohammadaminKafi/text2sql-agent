@@ -1,7 +1,7 @@
 import re
 import pytest
 import dspy
-from components.dspy_signatures import DetectAmbiguitySig
+from core.agent_core.basic.signatures.signatures import DetectAmbiguitySig
 
 
 # --------------------------

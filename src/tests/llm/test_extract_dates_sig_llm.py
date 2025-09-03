@@ -1,7 +1,7 @@
 import re
 import pytest
 import dspy
-from components.dspy_signatures import ExtractDatesSig
+from core.agent_core.basic.signatures import ExtractDatesSig
 
 
 # --------------------------

@@ -1,7 +1,7 @@
 import re
 import pytest
 import dspy
-from components.dspy_signatures import NormalizeDatesTranslateSig
+from core.agent_core.basic.signatures import NormalizeDatesTranslateSig
 
 # --------------------------
 # Fixtures & helpers
