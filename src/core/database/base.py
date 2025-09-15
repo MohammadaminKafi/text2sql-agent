@@ -4,7 +4,7 @@ Abstract base classes and interfaces for database connectors.
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Dict, Any, Optional, Union
 import pandas as pd
-from sqlalchemy import Engine
+from sqlalchemy import Engine, text
 
 # Initialize smartlog if not already done
 from core.smartlog import init_logging
@@ -64,7 +64,7 @@ class DatabaseConnector(ABC):
                 
                 # Test the connection
                 with self._engine.connect() as conn:
-                    conn.execute("SELECT 1")
+                    conn.execute(text("SELECT 1"))
                 
                 self._connected = True
                 logger.sysdebug(f"Successfully connected to {self.description}")
@@ -233,7 +233,7 @@ class DatabaseConnector(ABC):
         try:
             engine = self.get_engine()
             with engine.connect() as conn:
-                conn.execute("SELECT 1")
+                conn.execute(text("SELECT 1"))
             return True
         except Exception as e:
             logger.error(f"Connection test failed for {self.description}: {e}")

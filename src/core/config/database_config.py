@@ -111,7 +111,9 @@ class DatabaseConfig:
         # Resolve environment variables
         try:
             profile = self._resolve_env_vars(profile)
-            logger.sysdebug(f"Resolved profile '{profile_name}': {profile.get('description', 'No description')}")
+            # Debug logging to see what we resolved
+            safe_profile = {k: ("****" if "password" in k.lower() else v) for k, v in profile.items()}
+            logger.sysdebug(f"Resolved profile '{profile_name}': {safe_profile}")
             return profile
         except EnvironmentError as e:
             logger.error(f"Failed to resolve environment variables for profile '{profile_name}': {e}")

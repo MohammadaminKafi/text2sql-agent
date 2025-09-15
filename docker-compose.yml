@@ -16,6 +16,8 @@ services:
       - MSSQL_DB=AdventureWorks2022
       - MSSQL_USER=sa
       - MSSQL_PASSWORD=${SA_PASSWORD}
+      - MSSQL_ENCRYPT=yes
+      - MSSQL_TRUST_SERVER_CERT=yes
       # Explicitly set log directory (though ./log should work from /app workdir)
       - LOG_BASE_DIR=/app/log
     volumes:
@@ -135,35 +137,37 @@ services:
         condition: service_completed_successfully
     networks:
       - app-net
-    command: > 
-      bash -lc "
+    command:
+      - bash
+      - -c
+      - |
         set -euo pipefail
-
-        # Locate sqlcmd path (tools 18 or legacy)
-        SQLCMD=; if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; elif [ -x /opt/mssql-tools/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools/bin/sqlcmd; else echo 'sqlcmd not found'; exit 127; fi
-
+        
+        # Locate sqlcmd path
+        if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then 
+          SQLCMD=/opt/mssql-tools18/bin/sqlcmd
+        elif [ -x /opt/mssql-tools/bin/sqlcmd ]; then 
+          SQLCMD=/opt/mssql-tools/bin/sqlcmd
+        else 
+          echo 'sqlcmd not found, checking available tools:'
+          find /opt -name sqlcmd 2>/dev/null || true
+          exit 127
+        fi
+        
+        echo "Using sqlcmd at: $$SQLCMD"
+        
         echo 'Checking if AdventureWorks2022 exists...'
-        $$SQLCMD -S sqlserver -U sa -P \"$$SA_PASSWORD\" -Q \"IF DB_ID(N''AdventureWorks2022'') IS NOT NULL SELECT 1 ELSE SELECT 0\" -h -1 -W > /tmp/exists.txt
-        if [ \"$(tr -d '\\r\\n ' </tmp/exists.txt)\" = \"1\" ]; then
+        $$SQLCMD -S sqlserver -U sa -P "$$SA_PASSWORD" -Q "IF DB_ID(N'AdventureWorks2022') IS NOT NULL SELECT 1 ELSE SELECT 0" -h -1 -W > /tmp/exists.txt
+        if [ "$$(tr -d '\r\n ' </tmp/exists.txt)" = "1" ]; then
           echo 'AdventureWorks2022 already present, skipping restore.'
           exit 0
         fi
-
+        
         echo 'Restoring AdventureWorks2022 from /seed/AdventureWorks2022.bak ...'
-        # AdventureWorks2022 logical file names in the official .bak
-        DATA_LOGICAL='AdventureWorks2022'
-        LOG_LOGICAL='AdventureWorks2022_Log'
-
-        $$SQLCMD -S sqlserver -U sa -P \"$$SA_PASSWORD\" -Q \"
-          RESTORE DATABASE [AdventureWorks2022]
-          FROM DISK = N''/seed/AdventureWorks2022.bak''
-          WITH MOVE N''$${DATA_LOGICAL}'' TO N''/var/opt/mssql/data/AdventureWorks2022.mdf'',
-               MOVE N''$${LOG_LOGICAL}''  TO N''/var/opt/mssql/data/AdventureWorks2022_log.ldf'',
-               REPLACE, STATS = 5;
-        \"
-
+        
+        $$SQLCMD -S sqlserver -U sa -P "$$SA_PASSWORD" -Q "RESTORE DATABASE [AdventureWorks2022] FROM DISK = N'/seed/AdventureWorks2022.bak' WITH MOVE N'AdventureWorks2022' TO N'/var/opt/mssql/data/AdventureWorks2022.mdf', MOVE N'AdventureWorks2022_Log' TO N'/var/opt/mssql/data/AdventureWorks2022_log.ldf', REPLACE, STATS = 5"
+        
         echo 'Restore complete.'
-      "
     restart: "no"
 
 networks:

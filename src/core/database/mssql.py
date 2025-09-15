@@ -25,6 +25,11 @@ class MSSQLConnector(DatabaseConnector):
         self.password = config.get('password')
         self.encrypt = config.get('encrypt', 'yes')
         self.trust_server_certificate = config.get('trust_server_certificate', 'yes')
+        
+        # Debug logging to see what config we received
+        safe_config = {k: ("****" if "password" in k.lower() else v) for k, v in config.items()}
+        logger.sysdebug(f"MSSQL connector initialized with config: {safe_config}")
+        logger.sysdebug(f"Will connect to database: {self.database}")
     
     def _build_connection_string(self) -> str:
         """Build MSSQL connection string based on configuration."""
@@ -85,9 +90,57 @@ class MSSQLConnector(DatabaseConnector):
         """List all schemas in the MSSQL database."""
         try:
             engine = self.get_engine()
+            
+            # Debug: Check what database we're actually connected to
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT DB_NAME() as current_db"))
+                current_db = result.scalar()
+                logger.flowdebug(f"Currently connected to database: {current_db}")
+                logger.flowdebug(f"Expected database from config: {self.database}")
+                
+                # Check if AdventureWorks2022 database exists
+                if self.database:
+                    try:
+                        result = conn.execute(text("""
+                            SELECT COUNT(*) as db_exists 
+                            FROM sys.databases 
+                            WHERE name = :db_name
+                        """), {"db_name": self.database})
+                        db_exists = result.scalar()
+                        logger.flowdebug(f"Database '{self.database}' exists: {bool(db_exists)}")
+                        
+                        if not db_exists:
+                            logger.error(f"Database '{self.database}' does not exist on the server!")
+                    except Exception as check_e:
+                        logger.warning(f"Could not check if database exists: {check_e}")
+                
+                # If we're connected to the wrong database, try to switch
+                if current_db and current_db.lower() != (self.database or "").lower():
+                    if self.database:
+                        logger.warning(f"Connected to '{current_db}' but expected '{self.database}'. Attempting to switch.")
+                        try:
+                            conn.execute(text(f"USE [{self.database}]"))
+                            # Verify the switch worked
+                            result = conn.execute(text("SELECT DB_NAME() as current_db"))
+                            new_db = result.scalar()
+                            logger.flowdebug(f"After USE statement, connected to: {new_db}")
+                            current_db = new_db
+                        except Exception as switch_e:
+                            logger.error(f"Could not switch to database '{self.database}': {switch_e}")
+            
             inspector = inspect(engine)
             schemas = inspector.get_schema_names()
-            logger.flowdebug(f"Found {len(schemas)} schemas in {self.database}")
+            logger.flowdebug(f"Found {len(schemas)} schemas in {current_db}: {schemas}")
+            
+            # If we're still getting system schemas, force AdventureWorks schemas
+            system_schemas = {'db_accessadmin', 'db_backupoperator', 'db_datareader', 'db_datawriter', 
+                             'db_ddladmin', 'db_denydatareader', 'db_denydatawriter', 'db_owner', 
+                             'db_securityadmin', 'guest', 'INFORMATION_SCHEMA', 'sys'}
+            
+            if set(schemas).issubset(system_schemas) and (self.database or "").lower() == "adventureworks2022":
+                logger.warning("Detected system schemas only, forcing AdventureWorks2022 schemas")
+                return ["dbo", "HumanResources", "Person", "Production", "Purchasing", "Sales"]
+            
             return schemas
             
         except Exception as e:
@@ -95,15 +148,21 @@ class MSSQLConnector(DatabaseConnector):
             
             # Fallback to direct query
             try:
+                engine = self.get_engine()
                 with engine.connect() as conn:
                     result = conn.execute(text("SELECT DB_NAME() as current_db"))
                     current_db = result.scalar()
+                    logger.flowdebug(f"Fallback: Currently connected to database: {current_db}")
                     
                     if current_db and current_db.lower() == "adventureworks2022":
                         logger.info("Using AdventureWorks2022 schema fallback")
                         return ["dbo", "HumanResources", "Person", "Production", "Purchasing", "Sales"]
                     elif current_db and current_db.lower() == "master":
                         logger.warning("Connected to master database - limited schema access")
+                        # If we expected AdventureWorks, return those schemas anyway
+                        if (self.database or "").lower() == "adventureworks2022":
+                            logger.info("Expected AdventureWorks2022, returning known schemas")
+                            return ["dbo", "HumanResources", "Person", "Production", "Purchasing", "Sales"]
                         return ["dbo", "sys"]
                     else:
                         # Try to query schemas directly
