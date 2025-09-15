@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 
 from .config import settings
 from .deps import init_components, shutdown_components
@@ -18,7 +18,8 @@ from core.smartlog import init_logging, create_thread
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    load_dotenv()  
+    # Load env from the nearest .env (project root in Docker Compose or local dev)
+    load_dotenv(find_dotenv(usecwd=True), override=False)
     init_logging()  
     create_thread("system-init")  
     logging.getLogger(__name__).sysdebug("Service starting up")

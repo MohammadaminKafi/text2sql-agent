@@ -1,0 +1,21 @@
+# Docker build context hygiene
+.git
+**/__pycache__/
+**/*.pyc
+.venv/
+venv/
+venv_w/
+node_modules/
+.log/
+log/
+logs/
+
+# Datasets and large resources not needed for backend image
+datasets/
+
+# IDE/editor
+.vscode/
+.idea/
+.DS_Store
+pytest_cache/
+.mypy_cache/

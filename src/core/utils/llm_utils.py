@@ -21,13 +21,27 @@ def create_dspy_lm(
     num_retries: int = 1
 ):
 
-    api_key = api_key or os.getenv("AVALAI_API_KEY")
+    # Resolve API key and base URL from common env names, allowing overrides
+    env_api_key = (
+        os.getenv("OPENAI_API_KEY")
+        or os.getenv("LITELLM_API_KEY")
+        or os.getenv("AVALAI_API_KEY")
+    )
+    env_api_base = (
+        os.getenv("OPENAI_BASE")
+        or os.getenv("OPENAI_API_BASE")
+        or os.getenv("AVALAI_API_BASE")
+        or api_base
+    )
+
+    api_key = api_key or env_api_key
+    api_base = env_api_base or api_base
     urlparse(api_base)
 
     logger.sysdebug("🌟 Initialising dspy.LM: model=%s  api_base=%s", model, api_base)
     lm = dspy.LM(
-        model=model, 
-        api_key=api_key, 
+    model=model, 
+    api_key=api_key, 
         api_base=api_base,
         temperature=temperature,
         max_tokens=max_tokens,

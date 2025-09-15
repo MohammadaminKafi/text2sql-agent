@@ -85,7 +85,7 @@ class BasicText2SQLFlow(Module):
         # Sanity checks
         is_sql_request, gate_confidence, gate_cause = self.gate(user_prompt)
         if not is_sql_request:
-            return pd.DataFrame(), "", f"Request does not seem to be a SQL request (confidence={gate_confidence}): {gate_cause}"
+            return pd.DataFrame(), "", f"Request does not seem to be a SQL request (confidence={gate_confidence}): {gate_cause}", {"figures": [], "labels": [], "artifacts": []}
         
         # Prompt reforming
         dates_list = self.convert_dates(user_prompt)

@@ -1,5 +1,5 @@
 """
-Database utilities module - DEPRECATED
+Main database connection module - DEPRECATED
 
 This module is deprecated. Use the new unified database system:
     from core.database import get_db_manager, create_connector
@@ -10,7 +10,7 @@ import os
 import urllib.parse
 import warnings
 from typing import Optional
-from sqlalchemy import create_engine, Engine as SAEngine, text
+from sqlalchemy import create_engine, Engine as SAEngine
 from core.smartlog import get_logger
 
 logger = get_logger(__name__)
@@ -22,61 +22,101 @@ def _issue_deprecation_warning(func_name: str):
     """Issue a deprecation warning for legacy functions."""
     warnings.warn(
         f"Function '{func_name}' is deprecated. Use the new unified database system: "
-        "from core.database import get_db_manager, create_connector",
+        "from core.database import create_connector",
         DeprecationWarning,
         stacklevel=3
     )
 
-def connect_mssql_engine(database_override: Optional[str] = None):
+# --------------------------------------
+# MSSQL (Windows auth; host dev machine)
+# --------------------------------------
+def connect_mssql_engine() -> SAEngine:
     """
-    DEPRECATED: Use create_connector('mssql_docker') or create_connector('mssql_adventureworks') instead.
+    DEPRECATED: Use create_connector('mssql_adventureworks') instead.
     
-    Build a pyodbc connection string for the SQL Server container using SQL auth.
-    Env vars (with sensible defaults):
-      - MSSQL_DRIVER (default: ODBC Driver 18 for SQL Server)
-      - MSSQL_HOST (default: text2sql-mssql)
-      - MSSQL_PORT (default: 1433)
-      - MSSQL_DB (default: AdventureWorks2022)
-      - MSSQL_USER (default: sa)
-      - MSSQL_PASSWORD (required if user != '' )
-      - MSSQL_ENCRYPT (default: yes)
-      - MSSQL_TRUST_SERVER_CERT (default: yes)
-    
-    Args:
-        database_override: If provided, use this database name instead of MSSQL_DB env var
+    Windows Authentication to a local SQL Server on the host.
+    Kept for backwards compatibility with 'mssql_win_auth'.
     """
     _issue_deprecation_warning('connect_mssql_engine')
     
-    driver = os.getenv("MSSQL_DRIVER", "ODBC Driver 18 for SQL Server")
-    host = os.getenv("MSSQL_HOST", "text2sql-mssql")
-    port = os.getenv("MSSQL_PORT", "1433")
-    database = database_override or os.getenv("MSSQL_DB", "AdventureWorks2022")
-    user = os.getenv("MSSQL_USER", "sa")
-    password = os.getenv("MSSQL_PASSWORD")
-    encrypt = os.getenv("MSSQL_ENCRYPT", "yes")
-    trust_cert = os.getenv("MSSQL_TRUST_SERVER_CERT", "yes")
-
-    if user and (password is None):
-        raise EnvironmentError(
-            "MSSQL_PASSWORD not set. Add it to your .env (MSSQL_USER='sa' is default)."
-        )
-
-    # Compose connection string; avoid logging password
-    conn_parts = [
-        f"DRIVER={{{driver}}}",
-        f"SERVER={host},{port}",
-        f"DATABASE={database}",
-        f"UID={user}",
-        f"PWD={password}",
-        f"Encrypt={encrypt}",
-        f"TrustServerCertificate={trust_cert}",
-    ]
-    conn_str = ";".join(conn_parts) + ";"
-    safe_conn_str = conn_str.replace(password or "", "******")
+    conn_str = (
+        "DRIVER={ODBC Driver 17 for SQL Server};"
+        "SERVER=localhost;"
+        "DATABASE=AdventureWorks2022;"
+        "Trusted_Connection=yes;"
+    )
     engine_url = "mssql+pyodbc:///?odbc_connect=" + urllib.parse.quote_plus(conn_str)
-    logger.sysdebug(f"Creating DB engine with ODBC: {safe_conn_str}")
+    logger.sysdebug(f"Creating DB engine (WinAuth) with URL: {engine_url}")
     return create_engine(engine_url)
 
+# --------------------------------------
+# MSSQL (SQL auth; Docker-compose setup)
+# --------------------------------------
+def connect_mssql_engine_docker() -> SAEngine:
+    """
+    DEPRECATED: Use create_connector('mssql_docker') instead.
+    
+    SQL Authentication for the Dockerized SQL Server service.
+    Defaults match the docker-compose snippet:
+      - host:     sqlserver
+      - port:     1433
+      - database: AdventureWorks2022
+      - user:     sa
+      - password: SA_PASSWORD (from .env)
+    You can override via env: MSSQL_HOST, MSSQL_PORT, MSSQL_DB, MSSQL_USER, MSSQL_PASSWORD.
+    Also supports MSSQL_ODBC_DRIVER (default: 'ODBC Driver 18 for SQL Server').
+    """
+    _issue_deprecation_warning('connect_mssql_engine_docker')
+    
+    host = os.getenv("MSSQL_HOST", "sqlserver")
+    port = os.getenv("MSSQL_PORT", "1433")
+    database = os.getenv("MSSQL_DB", "AdventureWorks2022")
+    user = os.getenv("MSSQL_USER", "sa")
+
+    # Prefer explicit MSSQL_PASSWORD; fall back to SA_PASSWORD for convenience
+    password = os.getenv("MSSQL_PASSWORD") or os.getenv("SA_PASSWORD")
+    if not password:
+        raise EnvironmentError(
+            "Missing MSSQL password. Set MSSQL_PASSWORD or SA_PASSWORD in your environment."
+        )
+
+    # Driver 18 is recommended on Linux containers. Allow override.
+    driver = os.getenv("MSSQL_ODBC_DRIVER", "ODBC Driver 18 for SQL Server")
+
+    # For local/dev: encrypt+trust (avoid cert hassles). For prod, manage certs properly.
+    encrypt = os.getenv("MSSQL_ENCRYPT", "yes")  # 'yes'|'no'
+    trust_cert = os.getenv("MSSQL_TRUST_SERVER_CERTIFICATE", "yes")  # 'yes'|'no'
+
+    # Optional: connection timeout seconds
+    timeout = os.getenv("MSSQL_LOGIN_TIMEOUT", "30")
+
+    conn_kv = {
+        "DRIVER": f"{{{driver}}}",
+        "SERVER": f"{host},{port}",
+        "DATABASE": database,
+        "UID": user,
+        "PWD": password,
+        "Encrypt": encrypt,
+        "TrustServerCertificate": trust_cert,
+        "LoginTimeout": timeout,
+    }
+
+    # Build ODBC connection string safely, preserving spaces in driver name
+    conn_str = ";".join(f"{k}={v}" for k, v in conn_kv.items()) + ";"
+
+    engine_url = "mssql+pyodbc:///?odbc_connect=" + urllib.parse.quote_plus(conn_str)
+
+    # Do not log the password; show a redacted URL
+    redacted = engine_url.replace(
+        urllib.parse.quote_plus(password), "******"
+    )
+    logger.sysdebug(f"Creating DB engine (Docker MSSQL) with URL: {redacted}")
+
+    return create_engine(engine_url)
+
+# --------------------------------------
+# Snowflake (unchanged)
+# --------------------------------------
 def connect_snowflake_engine(
     warehouse: str,
     database: str,
@@ -115,6 +155,9 @@ def connect_snowflake_engine(
     )
     return create_engine(engine_url)
 
+# --------------------------------------
+# Factory
+# --------------------------------------
 def create_db_engine(
     dbms: str = "mssql_win_auth",
     warehouse: Optional[str] = None,
@@ -125,7 +168,7 @@ def create_db_engine(
     
     Legacy compatibility function. Maps old DBMS strings to new profiles:
     - "mssql_win_auth" -> "mssql_adventureworks" (Windows Auth)
-    - "mssql" -> "mssql_docker" (SQL Auth)
+    - "mssql" -> "mssql_docker" (SQL Auth)  
     - "snowflake" -> "snowflake_default"
     """
     _issue_deprecation_warning('create_db_engine')
@@ -152,43 +195,10 @@ def create_db_engine(
         # Fallback to legacy implementation
         if dbms == "mssql_win_auth":
             return connect_mssql_engine()
-        
+
         if dbms == "mssql":
-            # Try to connect to the target database first
-            target_db = database or os.getenv("MSSQL_DB", "AdventureWorks2022")
-            try:
-                engine = connect_mssql_engine(database_override=target_db)
-                # Test the connection
-                with engine.connect() as conn:
-                    conn.execute(text("SELECT 1"))
-                logger.sysdebug(f"Successfully connected to database: {target_db}")
-                return engine
-            except Exception as e:
-                logger.warning(f"Failed to connect to {target_db}: {e}")
-                
-                # Check if it's a database access issue (login failed)
-                if "login failed" in str(e).lower() or "cannot open database" in str(e).lower():
-                    logger.info("Database may not exist or restore may not be complete. Attempting to connect to master database...")
-                    try:
-                        # Fallback to master database
-                        master_engine = connect_mssql_engine(database_override="master")
-                        with master_engine.connect() as conn:
-                            # Check if target database exists
-                            result = conn.execute(text("SELECT COUNT(*) FROM sys.databases WHERE name = :db_name"), {"db_name": target_db})
-                            db_exists = result.scalar() > 0
-                            if db_exists:
-                                logger.warning(f"Database '{target_db}' exists but connection failed. Check permissions.")
-                            else:
-                                logger.warning(f"Database '{target_db}' does not exist. It may not have been restored yet.")
-                        
-                        logger.info(f"Connected to master database. Will operate with limited functionality until '{target_db}' is available.")
-                        return master_engine
-                    except Exception as master_e:
-                        logger.error(f"Failed to connect to master database: {master_e}")
-                        raise RuntimeError(f"Cannot connect to SQL Server. Target DB error: {e}, Master DB error: {master_e}")
-                else:
-                    # Re-raise if it's not a database access issue
-                    raise e
+            # Dockerized SQL Server using SQL auth
+            return connect_mssql_engine_docker()
 
         if dbms == "snowflake":
             if not warehouse:

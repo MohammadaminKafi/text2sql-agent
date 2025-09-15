@@ -1,0 +1,168 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: src/backend/Dockerfile
+    container_name: text2sql-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=sqlserver://sa:${SA_PASSWORD}@sqlserver:1433?database=AdventureWorks2022&encrypt=false
+      - MSSQL_HOST=sqlserver
+      - MSSQL_PORT=1433
+      - MSSQL_DB=AdventureWorks2022
+      - MSSQL_USER=sa
+      - MSSQL_PASSWORD=${SA_PASSWORD}
+    restart: unless-stopped
+    networks:
+      - app-net
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      restore-db:
+        condition: service_completed_successfully
+
+  # Runs once, exits 0 when backend is ready
+  wait-backend:
+    image: curlimages/curl:8.10.1
+    command: >
+      sh -c "
+        echo 'Waiting for backend...';
+        for i in $(seq 1 60); do
+          if curl -sf http://backend:8000/healthz >/dev/null; then
+            echo 'Backend is up';
+            exit 0;
+          fi;
+          sleep 1;
+        done;
+        echo 'Backend not ready in time' >&2; exit 1
+      "
+    depends_on:
+      - backend
+    restart: "no"
+    networks:
+      - app-net
+
+  frontend:
+    build:
+      context: src/frontend
+      dockerfile: Dockerfile
+      args:
+        # This is used by the browser, so localhost is correct for host->backend
+        VITE_API_BASE_URL: http://localhost:8000
+    container_name: text2sql-frontend
+    ports:
+      - "5173:5173"
+    command: ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--strictPort", "--port", "5173"]
+    depends_on:
+      wait-backend:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    networks:
+      - app-net
+
+  # --- SQL Server 2022 ---
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: text2sql-mssql
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_PID=Developer
+      - SA_PASSWORD=${SA_PASSWORD}
+    ports:
+      - "1433:1433"
+    networks:
+      - app-net
+    volumes:
+      - mssql-data:/var/opt/mssql
+      # Mount the seed volume read-only so SQL Server can read the .bak during RESTORE
+      - mssql-seed:/seed:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "bash -lc 'echo > /dev/tcp/127.0.0.1/1433'" ]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+    restart: unless-stopped
+
+  # --- Download AdventureWorks .bak if missing (runs once) ---
+  download-bak:
+    image: curlimages/curl:8.10.1
+    container_name: text2sql-mssql-download
+    user: "0"
+    command: >
+      sh -c "
+        set -e;
+        mkdir -p /seed && chmod 777 /seed;
+        BAK=/seed/AdventureWorks2022.bak;
+        URL=$${ADVENTUREWORKS_URL:-https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2022.bak};
+        if [ -f \"$$BAK\" ]; then
+          echo 'AdventureWorks2022.bak already present, skipping download';
+          exit 0;
+        fi;
+        echo 'Downloading AdventureWorks2022.bak...';
+        curl -L --fail --retry 5 --retry-delay 2 \"$$URL\" -o \"$$BAK\";
+        echo 'Download complete';
+      "
+    volumes:
+      - mssql-seed:/seed
+    networks:
+      - app-net
+    restart: "no"
+
+  # --- Restore DB once SQL Server is healthy (runs once) ---
+  restore-db:
+    # Use the dedicated tools image that includes sqlcmd
+    image: mcr.microsoft.com/mssql-tools:latest
+    container_name: text2sql-mssql-restore
+    environment:
+      - SA_PASSWORD=${SA_PASSWORD}
+    volumes:
+      - mssql-seed:/seed
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      download-bak:
+        condition: service_completed_successfully
+    networks:
+      - app-net
+    command: > 
+      bash -lc "
+        set -euo pipefail
+
+        # Locate sqlcmd path (tools 18 or legacy)
+        SQLCMD=; if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools18/bin/sqlcmd; elif [ -x /opt/mssql-tools/bin/sqlcmd ]; then SQLCMD=/opt/mssql-tools/bin/sqlcmd; else echo 'sqlcmd not found'; exit 127; fi
+
+        echo 'Checking if AdventureWorks2022 exists...'
+        $$SQLCMD -S sqlserver -U sa -P \"$$SA_PASSWORD\" -Q \"IF DB_ID(N''AdventureWorks2022'') IS NOT NULL SELECT 1 ELSE SELECT 0\" -h -1 -W > /tmp/exists.txt
+        if [ \"$(tr -d '\\r\\n ' </tmp/exists.txt)\" = \"1\" ]; then
+          echo 'AdventureWorks2022 already present, skipping restore.'
+          exit 0
+        fi
+
+        echo 'Restoring AdventureWorks2022 from /seed/AdventureWorks2022.bak ...'
+        # AdventureWorks2022 logical file names in the official .bak
+        DATA_LOGICAL='AdventureWorks2022'
+        LOG_LOGICAL='AdventureWorks2022_Log'
+
+        $$SQLCMD -S sqlserver -U sa -P \"$$SA_PASSWORD\" -Q \"
+          RESTORE DATABASE [AdventureWorks2022]
+          FROM DISK = N''/seed/AdventureWorks2022.bak''
+          WITH MOVE N''$${DATA_LOGICAL}'' TO N''/var/opt/mssql/data/AdventureWorks2022.mdf'',
+               MOVE N''$${LOG_LOGICAL}''  TO N''/var/opt/mssql/data/AdventureWorks2022_log.ldf'',
+               REPLACE, STATS = 5;
+        \"
+
+        echo 'Restore complete.'
+      "
+    restart: "no"
+
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  mssql-data:
+  mssql-seed:

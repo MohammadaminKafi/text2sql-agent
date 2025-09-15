@@ -18,5 +18,5 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build
 
 # 4) Serve with Vite preview (dev convenience)
-EXPOSE 4173
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--strictPort", "--port", "4173"]
+EXPOSE 5173
+CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--strictPort", "--port", "5173"]
