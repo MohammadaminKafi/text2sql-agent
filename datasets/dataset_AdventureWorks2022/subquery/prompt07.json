@@ -1,6 +1,0 @@
-{
-  "well-explained": "Find inventory records where the quantity for a product at a specific location is below that product’s average quantity across all locations. Show product ID, name and the low quantity.",
-  "poorly-explained": "Low stock items.",
-  "underspecified": "Show inventory.",
-  "follow-up": "Include records where quantity is below that product's average."
-}

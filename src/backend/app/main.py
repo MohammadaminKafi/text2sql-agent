@@ -1,5 +1,6 @@
 
 import logging as _logging
+import os
 
 from contextlib import asynccontextmanager
 import logging
@@ -20,7 +21,10 @@ async def lifespan(app: FastAPI):
     # Startup
     # Load env from the nearest .env (project root in Docker Compose or local dev)
     load_dotenv(find_dotenv(usecwd=True), override=False)
-    init_logging()  
+    
+    # Use LOG_BASE_DIR environment variable if set, otherwise use default
+    log_base_dir = os.getenv('LOG_BASE_DIR', './log')
+    init_logging(base_dir=log_base_dir)  
     create_thread("system-init")  
     logging.getLogger(__name__).sysdebug("Service starting up")
     init_components()

@@ -1,6 +1,0 @@
-{
-  "well-explained": "Calculate yearly order statistics: count of orders, total subtotal amount, and average tax amount, grouped and ordered by the year of OrderDate.",
-  "poorly-explained": "Show annual orders and tax.",
-  "underspecified": "Give me order stats per year.",
-  "follow-up": "Include the tax collected for each year."
-}

@@ -1,6 +1,0 @@
-{
-  "well-explained": "Find customers who have placed more orders than the average customer and show their ID plus the number of orders.",
-  "poorly-explained": "Show me customers with lots of orders.",
-  "underspecified": "List customers.",
-  "follow-up": "Only show those ordering more than the average customer."
-}

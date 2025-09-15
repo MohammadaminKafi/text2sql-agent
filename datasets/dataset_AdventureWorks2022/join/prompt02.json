@@ -1,6 +1,0 @@
-{
-  "well-explained": "Find the vendor names, product names, and credit ratings for vendors with a credit rating of 3 or lower. Sort the result by credit rating in ascending order.",
-  "poorly-explained": "Which vendors have bad ratings and what do they sell?",
-  "underspecified": "List vendor products.",
-  "follow-up": "Filter vendors with credit rating 3 or less."
-}

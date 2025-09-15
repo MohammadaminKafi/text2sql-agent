@@ -20,7 +20,8 @@ class MSSQLConnector(DatabaseConnector):
         self.host = config.get('host', 'localhost')
         self.port = config.get('port', 1433)
         self.database = config.get('database')
-        self.username = config.get('username')
+        # Check for both 'username' and 'user' for backwards compatibility
+        self.username = config.get('username') or config.get('user')
         self.password = config.get('password')
         self.encrypt = config.get('encrypt', 'yes')
         self.trust_server_certificate = config.get('trust_server_certificate', 'yes')

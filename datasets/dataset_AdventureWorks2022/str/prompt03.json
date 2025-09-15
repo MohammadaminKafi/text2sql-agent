@@ -1,6 +1,0 @@
-{
-  "well-explained": "Classify each product by name: label it 'Mountain' if it contains 'mountain', 'Bike' if it contains 'bike', otherwise 'Other'; also find the position of the first space, returning ProductID, Name, ProductType, FirstSpacePos, sorted by type and name.",
-  "poorly-explained": "Tag products containing mountain or bike and note where spaces are.",
-  "underspecified": "Show product type and space position.",
-  "follow-up": "Label as 'Mountain', 'Bike' or 'Other' and give first space position."
-}

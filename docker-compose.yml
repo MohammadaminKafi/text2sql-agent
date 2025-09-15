@@ -16,6 +16,13 @@ services:
       - MSSQL_DB=AdventureWorks2022
       - MSSQL_USER=sa
       - MSSQL_PASSWORD=${SA_PASSWORD}
+      # Explicitly set log directory (though ./log should work from /app workdir)
+      - LOG_BASE_DIR=/app/log
+    volumes:
+      # Mount the log directory to access container logs on the host
+      - ./log:/app/log
+      # Also mount the src/log directory for any logs created there
+      - ./src/log:/app/src/log
     restart: unless-stopped
     networks:
       - app-net

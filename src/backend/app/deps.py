@@ -1,8 +1,6 @@
-# src/backend/app/deps.py
 import logging
 from typing import Optional
 
-# Use new unified database system
 from core.database import get_db_manager, create_connector
 from core.utils.llm_utils import get_llm
 from core.agent_core.basic.top_flow import BasicText2SQLFlow
@@ -35,7 +33,7 @@ def init_components():
         # Fallback to legacy system
         from core.utils.db_utils import create_db_engine
         
-        _engine = create_db_engine(dbms="mssql", database="ADVENTUREWORKS")
+        _engine = create_db_engine(dbms="mssql", database="AdventureWorks2022")
         lm = get_llm("avalai")
         _flow = BasicText2SQLFlow(engine=_engine, lm=lm)
         logging.getLogger(__name__).debug("Initialized engine/flow with legacy system.")

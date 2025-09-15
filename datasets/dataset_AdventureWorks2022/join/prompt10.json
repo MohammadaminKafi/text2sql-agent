@@ -1,6 +1,0 @@
-{
-  "well-explained": "Find vendors supplying more than five distinct products; show vendor name, count of products, and sum of list‑price times vendor standard price.",
-  "poorly-explained": "Which vendors have lots of products?",
-  "underspecified": "List vendors and products.",
-  "follow-up": "Only vendors with more than five products."
-}

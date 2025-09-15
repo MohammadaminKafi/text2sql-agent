@@ -1,6 +1,0 @@
-{
-  "well-explained": "با اتصال Product به ProductSubcategory و سپس ProductCategory، تعداد محصول هر دسته را بشمار.",
-  "poorly-explained": "تعداد محصولات به تفکیک دسته را بده.",
-  "underspecified": "چند محصول در هر دسته وجود دارد؟",
-  "follow-up": "تعداد محصولات هر دسته را بشمار."
-}

@@ -1,6 +1,0 @@
-{
-  "well-explained": "Return the ID and name of products that have never been ordered.",
-  "poorly-explained": "Products that never sold.",
-  "underspecified": "Give me product list.",
-  "follow-up": "Only include products that have never been ordered."
-}

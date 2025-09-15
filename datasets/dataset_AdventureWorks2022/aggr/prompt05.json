@@ -1,6 +1,0 @@
-{
-  "well-explained": "Compute the number of shipped orders, total revenue, and average freight per order for each year, using only orders with Status = 5.",
-  "poorly-explained": "Show yearly shipped order numbers with revenue and freight average.",
-  "underspecified": "Give yearly order stats.",
-  "follow-up": "Look only at shipped orders and report revenue and average freight."
-}

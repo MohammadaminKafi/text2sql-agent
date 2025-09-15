@@ -18,7 +18,8 @@ class SnowflakeConnector(DatabaseConnector):
         self.account = config.get('account')
         self.warehouse = config.get('warehouse', 'COMPUTE_WH_PARTICIPANT')
         self.database = config.get('database')
-        self.username = config.get('username')
+        # Support both 'user' and 'username' for backwards compatibility
+        self.username = config.get('username') or config.get('user')
         self.password = config.get('password')
         self.role = config.get('role', 'PARTICIPANT')
         

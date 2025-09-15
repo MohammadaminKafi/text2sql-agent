@@ -1,6 +1,0 @@
-{
-  "well-explained": "Identify customers whose average order value exceeds the average order value for all orders placed in 2011; show their ID, number of orders, total spent, and average order value, sorted by total spent descending.",
-  "poorly-explained": "Show customers with higher average orders than year 2011.",
-  "underspecified": "Customer average order values.",
-  "follow-up": "Compare their average order value to the 2011 average."
-}

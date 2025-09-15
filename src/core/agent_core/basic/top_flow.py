@@ -112,7 +112,7 @@ class BasicText2SQLFlow(Module):
             for table in tables.keys()
         ]
 
-        relations = get_pk_fk_pairs(engine=self.engine, tables=survived_tables)
+        relations = get_pk_fk_pairs(self.engine, survived_tables)
 
         # SQL generation
         sql_draft = self.generate_sql_draft(

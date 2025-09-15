@@ -1,6 +1,0 @@
-{
-  "well-explained": "Count how many products belong to each product category, joining Product → ProductSubcategory → ProductCategory.",
-  "poorly-explained": "Give me product counts by category.",
-  "underspecified": "How many products are in categories?",
-  "follow-up": "Count products within each category."
-}

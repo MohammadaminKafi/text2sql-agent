@@ -1,6 +1,0 @@
-{
-  "well-explained": "List all employees with their ID, first name, last name, and hire date. Additionally, rank the employees within each job title group based on their hire date in descending order, where the most recent hires get the highest rank.",
-  "poorly-explained": "Give me employees and rank them by hire date within their job group.",
-  "underspecified": "Show employees and hire dates.",
-  "follow-up": "Rank employees within each job title by hire date."
-}
