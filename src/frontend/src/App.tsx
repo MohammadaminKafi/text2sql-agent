@@ -7,6 +7,7 @@ import { SQLCard } from '@/components/SQLCard'
 import { ResultsCard } from '@/components/ResultsCard'
 import { PlotsCard } from '@/components/PlotsCard'
 import { WarningsCard } from '@/components/WarningsCard'
+import { ClarificationProvider } from '@/components/ClarificationProvider'
 import type { ReportRequest, ReportResponse } from '@/lib/types'
 import { runReport } from '@/lib/api'
 
@@ -28,25 +29,26 @@ export default function App() {
   const r = state.response
 
   return (
-    <div className="min-h-dvh">
-      <TopBar onToggleSidebar={() => setSidebarOpen((v) => !v)} />
-      <div className="flex">
-        <Sidebar open={sidebarOpen} />
-        <main className="mx-auto w-full max-w-7xl p-4">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-            <div className="lg:col-span-12">
-              <InputCard onRun={handleRun} isLoading={state.isLoading} lastRequest={state.request} error={state.error} />
-            </div>
-            <div className="lg:col-span-6">
-              <SummaryCard summary={r?.summary} isLoading={state.isLoading} />
-            </div>
-            <div className="lg:col-span-6">
-              <SQLCard sql={r?.sql} isLoading={state.isLoading} />
-            </div>
-            <div className="lg:col-span-12">
-              <ResultsCard columns={r?.data.columns} rows={r?.data.rows} rowCount={r?.data.rowCount} isLoading={state.isLoading} />
-            </div>
-            <div className="lg:col-span-12">
+    <ClarificationProvider>
+      <div className="min-h-dvh">
+        <TopBar onToggleSidebar={() => setSidebarOpen((v) => !v)} />
+        <div className="flex">
+          <Sidebar open={sidebarOpen} />
+          <main className="mx-auto w-full max-w-7xl p-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+              <div className="lg:col-span-12">
+                <InputCard onRun={handleRun} isLoading={state.isLoading} lastRequest={state.request} error={state.error} />
+              </div>
+              <div className="lg:col-span-6">
+                <SummaryCard summary={r?.summary} isLoading={state.isLoading} />
+              </div>
+              <div className="lg:col-span-6">
+                <SQLCard sql={r?.sql} isLoading={state.isLoading} />
+              </div>
+              <div className="lg:col-span-12">
+                <ResultsCard columns={r?.data.columns} rows={r?.data.rows} rowCount={r?.data.rowCount} isLoading={state.isLoading} />
+              </div>
+              <div className="lg:col-span-12">
               <PlotsCard plots={r?.plots} isLoading={state.isLoading} />
             </div>
             <div className="lg:col-span-12">
@@ -56,5 +58,6 @@ export default function App() {
         </main>
       </div>
     </div>
+    </ClarificationProvider>
   )
 }

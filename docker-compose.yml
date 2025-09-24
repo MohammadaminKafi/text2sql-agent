@@ -20,11 +20,16 @@ services:
       - MSSQL_TRUST_SERVER_CERT=yes
       # Explicitly set log directory (though ./log should work from /app workdir)
       - LOG_BASE_DIR=/app/log
+      # Enable development mode for hot reloading
+      - DEVELOPMENT_MODE=true
     volumes:
       # Mount the log directory to access container logs on the host
       - ./log:/app/log
       # Also mount the src/log directory for any logs created there
       - ./src/log:/app/src/log
+      # Mount source code for hot reloading during development
+      - ./src/backend:/app/src/backend
+      - ./src/core:/app/src/core
     restart: unless-stopped
     networks:
       - app-net
@@ -63,6 +68,9 @@ services:
         # This is used by the browser, so localhost is correct for host->backend
         VITE_API_BASE_URL: http://localhost:8000
     container_name: text2sql-frontend
+    environment:
+      # This is used by the Vite dev server proxy (container-to-container communication)
+      - VITE_API_BASE_URL=http://backend:8000
     ports:
       - "5173:5173"
     command: ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--strictPort", "--port", "5173"]

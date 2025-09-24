@@ -4,6 +4,11 @@ from typing import Optional
 from core.database import get_db_manager, create_connector
 from core.utils.llm_utils import get_llm
 from core.agent_core.basic.top_flow import BasicText2SQLFlow
+from core.agent_core.basic.modules.utils.interaction_interface import (
+    set_interaction_interface, 
+    WebInteraction
+)
+from .routers.clarification import create_web_interaction_callback
 
 _engine = None
 _flow = None
@@ -12,6 +17,12 @@ _db_connector = None
 def init_components():
     global _engine, _flow, _db_connector
     logging.getLogger(__name__).debug("Initializing engine/flow...")
+
+    # Set up web interaction interface for clarifications
+    callback = create_web_interaction_callback()
+    web_interaction = WebInteraction(callback)
+    set_interaction_interface(web_interaction)
+    logging.getLogger(__name__).debug("Configured web interaction interface for clarifications.")
 
     try:
         # Use new unified database system

@@ -40,5 +40,5 @@ ENV PYTHONPATH=/app/src
 
 EXPOSE 8000
 
-# Start the FastAPI app
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start the FastAPI app with auto-reload for development
+CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src/backend", "--reload-dir", "/app/src/core"]

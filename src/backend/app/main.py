@@ -13,6 +13,8 @@ from dotenv import load_dotenv, find_dotenv
 from .config import settings
 from .deps import init_components, shutdown_components
 from .routers import report as report_router
+from .routers import clarification as clarification_router
+from .routers import logs as logs_router
 
 from core.smartlog import init_logging, create_thread
 
@@ -54,7 +56,11 @@ def create_app() -> FastAPI:
         req_id = request.headers.get("x-request-id") or str(uuid4())[:8]
         # Create a short-lived log thread per request (tweak naming if you prefer)
         create_thread(f"system-run-{req_id}")
-        logging.getLogger(__name__).sysdebug(f"Handling {request.method} {request.url.path} [{req_id}]")
+        
+        # Skip logging for polling endpoints to reduce log spam
+        if not request.url.path.endswith("/clarification/pending"):
+            logging.getLogger(__name__).sysdebug(f"Handling {request.method} {request.url.path} [{req_id}]")
+        
         resp = await call_next(request)
         return resp
 
@@ -62,7 +68,19 @@ def create_app() -> FastAPI:
     def healthz():
         return {"status": "ok"}
 
+    @app.get("/dev-test")
+    def dev_test():
+        """Test endpoint to verify hot reload functionality"""
+        import datetime
+        return {
+            "message": "Hot reload is working! 🚀", 
+            "timestamp": datetime.datetime.now().isoformat(),
+            "version": "1.0"
+        }
+
     app.include_router(report_router.router)
+    app.include_router(clarification_router.router)
+    app.include_router(logs_router.router)
     return app
 
 app = create_app()

@@ -35,8 +35,10 @@ class MSSQLConnector(DatabaseConnector):
         """Build MSSQL connection string based on configuration."""
         conn_parts = [f"DRIVER={{{self.driver}}}"]
         
-        # Server and port
-        if self.port:
+        # Server (don't add port for local connections with Windows auth)
+        if self.connection_type == 'windows_auth' and self.host in ['localhost', '(local)', '.']:
+            conn_parts.append(f"SERVER={self.host}")
+        elif self.port:
             conn_parts.append(f"SERVER={self.host},{self.port}")
         else:
             conn_parts.append(f"SERVER={self.host}")
@@ -61,11 +63,12 @@ class MSSQLConnector(DatabaseConnector):
         else:
             raise ConnectionError(f"Unknown connection type: {self.connection_type}", self)
         
-        # Security settings
-        conn_parts.extend([
-            f"Encrypt={self.encrypt}",
-            f"TrustServerCertificate={self.trust_server_certificate}"
-        ])
+        # Only add security settings for newer drivers and when specified
+        if hasattr(self, 'encrypt') and self.encrypt and 'Driver 17' in self.driver or 'Driver 18' in self.driver:
+            conn_parts.extend([
+                f"Encrypt={self.encrypt}",
+                f"TrustServerCertificate={self.trust_server_certificate}"
+            ])
         
         return ";".join(conn_parts) + ";"
     

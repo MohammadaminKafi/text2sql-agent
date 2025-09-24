@@ -36,8 +36,8 @@ class BasicText2SQLFlow(Module):
             self, 
             engine: sa.Engine, 
             lm: dspy.LM, 
-            generate_summary: bool = False, 
-            generate_viz: bool = False
+            generate_summary: bool = True, 
+            generate_viz: bool = True
         ):
 
         super().__init__()
